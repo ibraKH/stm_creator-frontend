@@ -6,6 +6,7 @@ interface TransitionModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (transitionData: TransitionData) => void;
+    onDelete?: (transitionData: TransitionData) => void;
     transition: TransitionData | null;
     stateNames: Record<number, string>; // Map state IDs to names for display
 }
@@ -152,7 +153,7 @@ const CausalChainEditor = ({
     );
 };
 
-export function TransitionModal({ isOpen, onClose, onSave, transition, stateNames }: TransitionModalProps) {
+export function TransitionModal({ isOpen, onClose, onSave, onDelete, transition, stateNames }: TransitionModalProps) {
     const [transitionData, setTransitionData] = useState<TransitionData | null>(null);
     const [activeTab, setActiveTab] = useState<'basic' | 'causal-chain'>('basic');
 
@@ -226,13 +227,25 @@ export function TransitionModal({ isOpen, onClose, onSave, transition, stateName
 
     return (
         <div className="transition-modal-overlay">
-            <div className="transition-modal-container">
-                <h2 className="transition-modal-header">
-                    <span>Edit Transition</span>
-                    <div className={`transition-delta ${transitionData.transition_delta < 0 ? 'negative' : 'positive'}`}>
-                        Δ {transitionData.transition_delta.toFixed(2)}
-                    </div>
-                </h2>
+                <div className="transition-modal-container">
+                    <h2 className="transition-modal-header">
+                        <span>Edit Transition</span>
+                        <div className={`transition-delta ${transitionData.transition_delta < 0 ? 'negative' : 'positive'}`}>
+                            Δ {transitionData.transition_delta.toFixed(2)}
+                        </div>
+                    </h2>
+                    {onDelete && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8 }}>
+                        <button
+                          className="btn btn-small btn-danger"
+                          type="button"
+                          onClick={() => onDelete(transitionData)}
+                          aria-label="Delete transition"
+                        >
+                          🗑 Delete Transition
+                        </button>
+                      </div>
+                    )}
 
                 <div className="transition-info">
                     <div className="transition-id">

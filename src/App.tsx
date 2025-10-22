@@ -99,7 +99,10 @@ function GraphEditor() {
     handleEdgesChange,
     handleSaveNode,
     handleSaveTransition,
+    handleDeleteTransition,
     handleSaveModel,
+    handleDeleteState,
+    handleDeleteModel,
     handleReLayout,
     applyLayout,
     toggleEdgeCreationMode,
@@ -141,6 +144,7 @@ function GraphEditor() {
           onLoadEdges={loadExistingEdges}
           onSaveModel={handleSaveModel}
           onOpenModelList={() => setIsModelListOpen(true)}
+          onDeleteModel={handleDeleteModel}
           onApplyLayout={applyLayout}
           onSaveVersion={saveCurrentVersion}
           onOpenVersionManager={openVersionManager}
@@ -230,6 +234,17 @@ function GraphEditor() {
         isOpen={isNodeModalOpen}
         onClose={closeNodeModal}
         onSave={handleSaveNode}
+        onDelete={() => {
+          // current node id is usually "state-<graphId>"; new nodes might be "node-<temp>"
+          const raw = initialNodeValues?.id ?? '';
+          const idStr = raw.startsWith('state-') ? raw.replace('state-', '') : raw.replace('node-', '');
+          const graphId = parseInt(idStr, 10);
+          if (!Number.isNaN(graphId)) {
+            // delete state by graph id (state_id or frontend_state_id)
+            // useGraphEditor exposes handleDeleteState
+            handleDeleteState(graphId);
+          }
+        }}
         initialValues={initialNodeValues}
         isEditing={isEditing}
       />
@@ -238,6 +253,7 @@ function GraphEditor() {
         isOpen={isTransitionModalOpen}
         onClose={closeTransitionModal}
         onSave={handleSaveTransition}
+        onDelete={handleDeleteTransition}
         transition={currentTransition}
         stateNames={stateNameMap}
       />

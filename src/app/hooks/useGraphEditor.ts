@@ -12,6 +12,7 @@ import { createTransitionCreator, createEdgeHandlers } from './graphTransitions'
 import { createNodeHandlers } from './graphNodes';
 import { createFilterActions } from './graphFilters';
 import { createModelActions } from './graphModel';
+import { createDeleteActions } from './graphDeletes';
 import { createImportExportActions } from './graphImportExport';
 import { createVersionActions } from './graphVersions';
 import { createLayoutActions } from './graphLayout';
@@ -84,6 +85,15 @@ export function useGraphEditor(): UseGraphEditorResult {
         setError: state.setError,
         setIsLoading: state.setIsLoading,
         setData: state.setBmrgData,
+    });
+
+    const deleteActions = createDeleteActions({
+        getData: () => state.bmrgData,
+        setData: state.setBmrgData,
+        setNodes: state.setNodes,
+        rebuildEdges,
+        handleNodeLabelChange,
+        handleNodeClick: nodeHandlers.handleNodeClick,
     });
 
     const versionActions = createVersionActions({
@@ -180,7 +190,10 @@ export function useGraphEditor(): UseGraphEditorResult {
         handleEdgesChange: edgeHandlers.handleEdgesChange,
         handleSaveNode: nodeHandlers.handleSaveNode,
         handleSaveTransition,
+        handleDeleteTransition: deleteActions.handleDeleteTransition,
         handleSaveModel: modelActions.handleSaveModel,
+        handleDeleteState: deleteActions.handleDeleteState,
+        handleDeleteModel: deleteActions.handleDeleteModel,
         handleReLayout: modelActions.handleReLayout,
         applyLayout: layoutActions.applyLayout,
         toggleEdgeCreationMode: nodeHandlers.toggleEdgeCreationMode,

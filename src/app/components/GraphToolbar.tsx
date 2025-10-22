@@ -10,6 +10,7 @@ interface GraphToolbarProps {
   readonly onLoadEdges: () => void;
   readonly onSaveModel: () => Promise<SaveModelResponse>;
   readonly onOpenModelList?: () => void;
+  readonly onDeleteModel?: () => void;
   readonly onSaveVersion: () => void;
   readonly onOpenVersionManager: () => void;
   readonly onImportEKS: (file: File) => void | Promise<void>;
@@ -34,6 +35,7 @@ export function GraphToolbar({
   onLoadEdges,
   onSaveModel,
   onOpenModelList,
+  onDeleteModel,
   onRelayout,
   onApplyLayout,
   onSaveVersion,
@@ -119,6 +121,17 @@ export function GraphToolbar({
           className="button button-secondary"
         >
           📂 Open Model
+        </button>
+      )}
+
+      {onDeleteModel && (
+        <button
+          onClick={onDeleteModel}
+          className="button button-danger"
+          title="Delete this model (Admin only)"
+          style={{ marginLeft: 6 }}
+        >
+          🗑 Delete Model
         </button>
       )}
 

@@ -14,6 +14,7 @@ interface NodeModalProps {
     readonly isOpen: boolean;
     readonly onClose: () => void;
     readonly onSave: (attributes: NodeAttributes) => void;
+    readonly onDelete?: () => void;
     readonly initialValues?: NodeAttributes;
     readonly isEditing: boolean;
 }
@@ -28,7 +29,7 @@ const VAST_CLASSES = [
     "Class VI"
 ];
 
-export function NodeModal({ isOpen, onClose, onSave, initialValues, isEditing }: NodeModalProps) {
+export function NodeModal({ isOpen, onClose, onSave, onDelete, initialValues, isEditing }: NodeModalProps) {
     const [attributes, setAttributes] = useState<NodeAttributes>({
         stateName: '',
         stateNumber: '',
@@ -290,7 +291,23 @@ export function NodeModal({ isOpen, onClose, onSave, initialValues, isEditing }:
 						</label>
 					</div>
 
-					<div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                        {isEditing && onDelete && (
+                            <button
+                                type="button"
+                                onClick={onDelete}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #cc0000',
+                                    backgroundColor: '#ffeeee',
+                                    color: '#8b0000',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Delete State
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={onClose}
