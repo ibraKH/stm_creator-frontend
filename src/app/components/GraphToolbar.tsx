@@ -129,7 +129,6 @@ export function GraphToolbar({
           onClick={onDeleteModel}
           className="button button-danger"
           title="Delete this model (Admin only)"
-          style={{ marginLeft: 6 }}
         >
           🗑 Delete Model
         </button>
