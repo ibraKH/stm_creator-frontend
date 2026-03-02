@@ -22,6 +22,7 @@ function getVastClassNumber(vastClass: string): number {
 export function CustomNode({ data, id }: CustomNodeProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [nodeLabel, setNodeLabel] = useState(data.label);
+    const canEdit = data.canEdit !== false;
 
     const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setNodeLabel(event.target.value);
@@ -42,6 +43,9 @@ export function CustomNode({ data, id }: CustomNodeProps) {
 
     const onNodeDoubleClick = (event: React.MouseEvent) => {
         event.stopPropagation();
+        if (!canEdit) {
+            return;
+        }
         setIsEditing(true);
     };
 
@@ -64,7 +68,7 @@ export function CustomNode({ data, id }: CustomNodeProps) {
     // Add special styling for selected nodes during edge creation
     const containerStyle = {
         boxShadow: isSelected ? '0 0 0 4px #007bff, 0 2px 5px rgba(0, 0, 0, 0.1)' : '0 2px 5px rgba(0, 0, 0, 0.1)',
-        cursor: isEdgeCreationMode ? 'crosshair' : 'pointer'
+        cursor: canEdit ? (isEdgeCreationMode ? 'crosshair' : 'pointer') : 'default'
     };
 
     return (

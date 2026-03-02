@@ -1,5 +1,3 @@
-// App.tsx — tour opens after auth with rAF delay, and is rendered OUTSIDE ReactFlow
-
 import {
   Background,
   Controls,
@@ -8,7 +6,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 import '@xyflow/react/dist/style.css';
@@ -33,20 +31,41 @@ import './extensions/extensions.css';
 
 import AuthPage from './app/auth/AuthPage';
 import { authStorage, type AuthUser } from './app/auth/api';
+import {
+  acquireModelLock,
+  getModelLock,
+  releaseModelLock,
+  renewModelLock,
+  type ModelLockInfo,
+} from './app/api/locks';
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
 
-// Onboarding
 import { Tour } from './extensions/onboarding/Tour';
 import { coachSteps } from './extensions/onboarding/coachmarks';
 import { useOnboarding } from './extensions/onboarding/useOnboarding';
 
-/** Graph Editor Page */
+type LockState = {
+  canEdit: boolean;
+  lockId: string | null;
+  holder: string | null;
+  expiresAt: string | null;
+};
+
+function applyLockInfo(info: ModelLockInfo): LockState {
+  const owner = info.owner ?? Boolean(info.lockId);
+  return {
+    canEdit: owner,
+    lockId: owner ? info.lockId ?? null : null,
+    holder: info.lockedBy ?? null,
+    expiresAt: info.expiresAt ?? null,
+  };
+}
+
 function GraphEditor() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isModelListOpen, setIsModelListOpen] = useState(false);
 
-  // Auth state
   const [auth, setAuth] = useState<{ token: string; user: AuthUser } | null>(() => {
     const token = authStorage.getToken();
     const user = authStorage.getUser();
@@ -54,10 +73,19 @@ function GraphEditor() {
   });
   const [isGuest, setIsGuest] = useState(false);
 
-  // Onboarding state management
+  const [lockState, setLockState] = useState<LockState>({
+    canEdit: false,
+    lockId: null,
+    holder: null,
+    expiresAt: null,
+  });
+  const lockRef = useRef<{ modelName: string | null; lockId: string | null }>({
+    modelName: null,
+    lockId: null,
+  });
+
   const onboarding = useOnboarding();
 
-  // Tour visibility - show after auth and model loading
   const [tourOpen, setTourOpen] = useState<boolean>(false);
   const closeTour = () => {
     setTourOpen(false);
@@ -113,45 +141,186 @@ function GraphEditor() {
     deleteVersion,
     exportToEKS,
     importFromEKS,
-  } = useGraphEditor();
+  } = useGraphEditor({
+    canEdit: lockState.canEdit,
+    onReadOnlyAction: () => {
+      window.alert('Model is locked by another user. You currently have read-only access.');
+    },
+  });
 
-  // Open tour AFTER auth/guest gate, model loading, and UI painting
+  const modelName = bmrgData?.stm_name?.trim() || null;
+
+  const releaseCurrentLock = async () => {
+    const currentModel = lockRef.current.modelName;
+    const currentLockId = lockRef.current.lockId;
+    if (!currentModel || !currentLockId) {
+      return;
+    }
+    try {
+      await releaseModelLock(currentModel, currentLockId);
+    } catch {
+      // ignore release failure on unload/logout
+    }
+    lockRef.current = { modelName: currentModel, lockId: null };
+    setLockState((prev) => ({ ...prev, canEdit: false, lockId: null }));
+  };
+
+  const handleAcquireLock = async () => {
+    if (!modelName) {
+      return;
+    }
+    if (!auth?.token) {
+      window.alert('Please sign in to request edit lock.');
+      return;
+    }
+
+    try {
+      const info = await acquireModelLock(modelName);
+      const next = applyLockInfo(info);
+      setLockState(next);
+      lockRef.current = { modelName, lockId: next.lockId };
+    } catch (error_) {
+      const message = error_ instanceof Error ? error_.message : 'Unable to acquire lock.';
+      try {
+        const status = await getModelLock(modelName);
+        const next = applyLockInfo(status);
+        setLockState(next);
+      } catch {
+        setLockState({ canEdit: false, lockId: null, holder: null, expiresAt: null });
+      }
+      window.alert(message);
+    }
+  };
+
+  const handleRefreshLock = async () => {
+    if (!modelName || !lockState.lockId) {
+      return;
+    }
+    try {
+      const info = await renewModelLock(modelName, lockState.lockId);
+      const next = applyLockInfo(info);
+      setLockState(next);
+      lockRef.current = { modelName, lockId: next.lockId };
+    } catch (error_) {
+      const message = error_ instanceof Error ? error_.message : 'Failed to refresh lock.';
+      setLockState((prev) => ({ ...prev, canEdit: false, lockId: null }));
+      lockRef.current = { modelName, lockId: null };
+      window.alert(message);
+    }
+  };
+
+  const handleReleaseLock = async () => {
+    await releaseCurrentLock();
+  };
+
   useEffect(() => {
     if (!(auth || isGuest)) return;
-    if (isLoading) return; // Wait for model to load
-    if (onboarding.finished) return; // Don't show if already completed
+    if (isLoading) return;
+    if (onboarding.finished) return;
 
-    // Use double rAF to ensure toolbar/panels have mounted and laid out
     const id1 = requestAnimationFrame(() => {
       const id2 = requestAnimationFrame(() => {
         setTourOpen(true);
         onboarding.start();
       });
-      // store id2 on globalThis to avoid TS unused var complaint
       (globalThis as any).__raf2 = id2;
     });
     return () => cancelAnimationFrame(id1);
   }, [auth, isGuest, isLoading, onboarding]);
 
-  const handleCreateNewModel = (modelName: string) => {
-    // Create new model with the specified name, jump to editor with model parameter
-    globalThis.location.href = `/editor?model=${encodeURIComponent(modelName)}`;
+  useEffect(() => {
+    if (!auth?.token || !modelName) {
+      setLockState({ canEdit: false, lockId: null, holder: null, expiresAt: null });
+      lockRef.current = { modelName, lockId: null };
+      return;
+    }
+
+    let cancelled = false;
+
+    const setupLock = async () => {
+      try {
+        const info = await acquireModelLock(modelName);
+        if (cancelled) return;
+        const next = applyLockInfo(info);
+        setLockState(next);
+        lockRef.current = { modelName, lockId: next.lockId };
+      } catch {
+        try {
+          const status = await getModelLock(modelName);
+          if (cancelled) return;
+          const next = applyLockInfo(status);
+          setLockState(next);
+          lockRef.current = { modelName, lockId: next.lockId };
+        } catch {
+          if (!cancelled) {
+            setLockState({ canEdit: false, lockId: null, holder: null, expiresAt: null });
+            lockRef.current = { modelName, lockId: null };
+          }
+        }
+      }
+    };
+
+    void setupLock();
+
+    return () => {
+      cancelled = true;
+      void releaseCurrentLock();
+    };
+  }, [auth?.token, modelName]);
+
+  useEffect(() => {
+    if (!modelName || !lockState.canEdit || !lockState.lockId) {
+      return;
+    }
+
+    const timer = globalThis.setInterval(() => {
+      void renewModelLock(modelName, lockState.lockId as string)
+        .then((info) => {
+          const next = applyLockInfo(info);
+          setLockState(next);
+          lockRef.current = { modelName, lockId: next.lockId };
+        })
+        .catch(() => {
+          setLockState((prev) => ({ ...prev, canEdit: false, lockId: null }));
+          lockRef.current = { modelName, lockId: null };
+        });
+    }, 20000);
+
+    return () => globalThis.clearInterval(timer);
+  }, [modelName, lockState.canEdit, lockState.lockId]);
+
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      const currentModel = lockRef.current.modelName;
+      const currentLockId = lockRef.current.lockId;
+      if (!currentModel || !currentLockId) {
+        return;
+      }
+      void releaseModelLock(currentModel, currentLockId);
+    };
+
+    globalThis.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      globalThis.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, []);
+
+  const handleCreateNewModel = (nextModelName: string) => {
+    globalThis.location.href = `/editor?model=${encodeURIComponent(nextModelName)}`;
   };
 
-  const handleLoadExistingModel = (modelName: string) => {
-    // Load existing model, jump to editor with model parameter
-    globalThis.location.href = `/editor?model=${encodeURIComponent(modelName)}`;
+  const handleLoadExistingModel = (nextModelName: string) => {
+    globalThis.location.href = `/editor?model=${encodeURIComponent(nextModelName)}`;
   };
 
-  const handleModelSelection = (modelName: string, isNew: boolean) => {
-    if (isNew) {
-      handleCreateNewModel(modelName);
+  const handleModelSelection = (nextModelName: string, createNew: boolean) => {
+    if (createNew) {
+      handleCreateNewModel(nextModelName);
     } else {
-      handleLoadExistingModel(modelName);
+      handleLoadExistingModel(nextModelName);
     }
   };
 
-  // Auth gate
   if (!auth && !isGuest) {
     return (
       <AuthPage
@@ -167,7 +336,6 @@ function GraphEditor() {
 
   return (
     <div className="app-container">
-      {/* Wrap toolbar with an anchor so tour has a stable target even if buttons shift */}
       <div data-tour="toolbar">
         <GraphToolbar
           onAddNode={openAddNodeModal}
@@ -190,7 +358,20 @@ function GraphEditor() {
           onOpenHelp={() => setIsHelpOpen(true)}
           userEmail={auth?.user.email ?? null}
           isGuest={isGuest}
+          canEdit={lockState.canEdit}
+          lockHolder={lockState.holder}
+          lockExpiresAt={lockState.expiresAt}
+          onAcquireLock={() => {
+            void handleAcquireLock();
+          }}
+          onRefreshLock={() => {
+            void handleRefreshLock();
+          }}
+          onReleaseLock={() => {
+            void handleReleaseLock();
+          }}
           onLogout={() => {
+            void releaseCurrentLock();
             authStorage.clear();
             setAuth(null);
             setIsGuest(false);
@@ -214,15 +395,15 @@ function GraphEditor() {
         onEdgeDoubleClick={onEdgeDoubleClick}
         edgesFocusable
         elementsSelectable
-        edgesReconnectable
+        edgesReconnectable={lockState.canEdit}
         reconnectRadius={10}
         fitView
         fitViewOptions={{ padding: 0.2, includeHiddenNodes: false }}
         proOptions={{ hideAttribution: true }}
         minZoom={0.2}
         maxZoom={2}
-        nodesDraggable
-        connectOnClick={false}
+        nodesDraggable={lockState.canEdit}
+        connectOnClick={lockState.canEdit}
         zoomOnDoubleClick={false}
         panOnDrag
         panOnScroll
@@ -233,7 +414,6 @@ function GraphEditor() {
         <MiniMap />
         <Controls />
 
-        {/* Tips anchor */}
         <Panel
           position="top-right"
           style={{ top: 156, right: 8, width: 360, zIndex: 18 }}
@@ -242,37 +422,30 @@ function GraphEditor() {
           <TipsPanel />
         </Panel>
 
-        {/* Filters anchor wrapper so the 'filters' step always finds a target */}
-          <TransitionFilterPanel
-            dataTourId="filters"
-            bmrgData={bmrgData}
-            showSelfTransitions={showSelfTransitions}
-            deltaFilter={deltaFilter}
-            onToggleSelfTransitions={toggleSelfTransitions}
-            onDeltaFilterChange={toggleDeltaFilter}
-            onReset={loadExistingEdges}
-          />
+        <TransitionFilterPanel
+          dataTourId="filters"
+          bmrgData={bmrgData}
+          showSelfTransitions={showSelfTransitions}
+          deltaFilter={deltaFilter}
+          onToggleSelfTransitions={toggleSelfTransitions}
+          onDeltaFilterChange={toggleDeltaFilter}
+          onReset={loadExistingEdges}
+        />
       </ReactFlow>
 
-      {/* IMPORTANT: Tour is OUTSIDE ReactFlow to avoid clipping/z-index issues */}
       <Tour open={tourOpen} onClose={closeTour} steps={coachSteps} />
 
-      {/* Edge creation hint banner */}
       <EdgeCreationHint isActive={edgeCreationMode} hasStartNode={Boolean(startNodeId)} />
 
-      {/* Modals */}
       <NodeModal
         isOpen={isNodeModalOpen}
         onClose={closeNodeModal}
         onSave={handleSaveNode}
         onDelete={() => {
-          // current node id is usually "state-<graphId>"; new nodes might be "node-<temp>"
           const raw = initialNodeValues?.id ?? '';
           const idStr = raw.startsWith('state-') ? raw.replace('state-', '') : raw.replace('node-', '');
           const graphId = parseInt(idStr, 10);
           if (!Number.isNaN(graphId)) {
-            // delete state by graph id (state_id or frontend_state_id)
-            // useGraphEditor exposes handleDeleteState
             handleDeleteState(graphId);
           }
         }}
@@ -303,7 +476,6 @@ function GraphEditor() {
   );
 }
 
-/** Router Shell */
 function App() {
   return (
     <Router>

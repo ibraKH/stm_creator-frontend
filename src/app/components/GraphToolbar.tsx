@@ -27,6 +27,12 @@ interface GraphToolbarProps {
   readonly isGuest?: boolean;
   readonly onLogout?: () => void;
   readonly onSignIn?: () => void;
+  readonly canEdit: boolean;
+  readonly lockHolder?: string | null;
+  readonly lockExpiresAt?: string | null;
+  readonly onAcquireLock?: () => void;
+  readonly onReleaseLock?: () => void;
+  readonly onRefreshLock?: () => void;
 }
 
 export function GraphToolbar({
@@ -51,22 +57,26 @@ export function GraphToolbar({
   userEmail,
   onLogout,
   onSignIn,
+  canEdit,
+  lockHolder,
+  lockExpiresAt,
+  onAcquireLock,
+  onReleaseLock,
+  onRefreshLock,
 }: GraphToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [layout, setLayout] = useState<LayoutStrategy>('force');
+  const editDisabled = !canEdit;
 
-  // Trigger hidden file input
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
 
-  // Pass selected file to consumer
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       onImportEKS(file);
     }
-    // Reset input value so the same file can be chosen again
     event.target.value = '';
   };
 
@@ -83,24 +93,28 @@ export function GraphToolbar({
         onChange={handleFileChange}
       />
 
-      <button data-tour="add-node" onClick={onAddNode} className="button button-primary">
-        ➕ Add Node
+      <button
+        data-tour="add-node"
+        onClick={onAddNode}
+        className="button button-primary"
+        disabled={editDisabled}
+        title={editDisabled ? 'Model is locked by another user' : undefined}
+      >
+        Add Node
       </button>
 
       <button
         data-tour="create-edge"
         onClick={onToggleEdgeCreation}
         className={`button button-edge-creation ${edgeCreationMode ? 'active' : ''}`}
+        disabled={editDisabled}
+        title={editDisabled ? 'Model is locked by another user' : undefined}
       >
-        {edgeCreationMode ? '🔗 Cancel Edge Creation' : '🔗 Create Edge'}
+        {edgeCreationMode ? 'Cancel Edge Creation' : 'Create Edge'}
       </button>
 
-      <button
-        data-tour="load-all-edges"
-        onClick={onLoadEdges}
-        className="button button-secondary"
-      >
-        🔄 Load All Edges
+      <button data-tour="load-all-edges" onClick={onLoadEdges} className="button button-secondary">
+        Load All Edges
       </button>
 
       <button
@@ -108,19 +122,16 @@ export function GraphToolbar({
         onClick={() => {
           void onSaveModel().catch(() => undefined);
         }}
-        disabled={isSaving}
+        disabled={isSaving || editDisabled}
         className={`button button-success ${isSaving ? 'button-disabled' : ''}`}
+        title={editDisabled ? 'Model is locked by another user' : undefined}
       >
-        {isSaving ? '💾 Saving...' : '💾 Save Model'}
+        {isSaving ? 'Saving...' : 'Save Model'}
       </button>
 
       {onOpenModelList && (
-        <button
-          data-tour="open-model"
-          onClick={onOpenModelList}
-          className="button button-secondary"
-        >
-          📂 Open Model
+        <button data-tour="open-model" onClick={onOpenModelList} className="button button-secondary">
+          Open Model
         </button>
       )}
 
@@ -129,8 +140,9 @@ export function GraphToolbar({
           onClick={onDeleteModel}
           className="button button-danger"
           title="Delete this model (Admin only)"
+          disabled={editDisabled}
         >
-          🗑 Delete Model
+          Delete Model
         </button>
       )}
 
@@ -138,36 +150,32 @@ export function GraphToolbar({
         data-tour="save-version"
         onClick={onSaveVersion}
         className="button button-secondary"
+        disabled={editDisabled}
+        title={editDisabled ? 'Model is locked by another user' : undefined}
       >
-        💾 Save Version
+        Save Version
       </button>
 
-      <button
-        data-tour="versions"
-        onClick={onOpenVersionManager}
-        className="button button-secondary"
-      >
-        🗂 Versions
+      <button data-tour="versions" onClick={onOpenVersionManager} className="button button-secondary">
+        Versions
       </button>
 
       <button data-tour="help" onClick={onOpenHelp} className="button button-secondary">
-        ❓ Help
+        Help
       </button>
 
       <button
         data-tour="import-eks"
         onClick={handleImportClick}
         className="button button-secondary"
+        disabled={editDisabled}
+        title={editDisabled ? 'Model is locked by another user' : undefined}
       >
-        📥 Import EKS
+        Import EKS
       </button>
 
-      <button
-        data-tour="export-eks"
-        onClick={onExportEKS}
-        className="button button-secondary"
-      >
-        📤 Export EKS
+      <button data-tour="export-eks" onClick={onExportEKS} className="button button-secondary">
+        Export EKS
       </button>
 
       {onApplyLayout && (
@@ -177,6 +185,7 @@ export function GraphToolbar({
             onChange={(e) => setLayout(e.target.value as LayoutStrategy)}
             className="button button-secondary select-like-btn"
             title="Layout"
+            disabled={editDisabled}
           >
             <option value="layered">Layered (directed)</option>
             <option value="grid">Grid</option>
@@ -194,16 +203,16 @@ export function GraphToolbar({
               }
             }}
             className="button button-secondary"
+            disabled={editDisabled}
+            title={editDisabled ? 'Model is locked by another user' : undefined}
           >
-            ▶ Apply Layout
+            Apply Layout
           </button>
         </div>
       )}
 
-      {/* Spacer to push identity controls to the right */}
       <div style={{ flex: 1 }} />
 
-      {/* Identity controls (right side) */}
       {userEmail ? (
         <>
           <span className="info-panel" style={{ padding: '8px 10px' }}>
@@ -224,19 +233,42 @@ export function GraphToolbar({
         </>
       )}
 
+      <span className="info-panel" style={{ padding: '8px 10px' }}>
+        {canEdit ? 'Edit lock acquired' : `Read-only${lockHolder ? `: ${lockHolder}` : ''}`}
+        {lockExpiresAt ? ` (expires ${new Date(lockExpiresAt).toLocaleTimeString()})` : ''}
+      </span>
+
+      {!canEdit && onAcquireLock && (
+        <button onClick={onAcquireLock} className="button button-primary">
+          Request Edit Lock
+        </button>
+      )}
+
+      {canEdit && onRefreshLock && (
+        <button onClick={onRefreshLock} className="button button-secondary">
+          Refresh Lock
+        </button>
+      )}
+
+      {canEdit && onReleaseLock && (
+        <button onClick={onReleaseLock} className="button button-secondary">
+          Release Lock
+        </button>
+      )}
+
       <button
         onClick={onToggleSelfTransitions}
         className={`button ${showSelfTransitions ? 'button-info' : 'button-secondary'}`}
       >
-        {showSelfTransitions ? '🔄 Hide Self Transitions' : '🔄 Show Self Transitions'}
+        {showSelfTransitions ? 'Hide Self Transitions' : 'Show Self Transitions'}
       </button>
 
       {bmrgData && (
         <div className="info-panel">
           <strong>{bmrgData.stm_name}</strong>
-          <span className="info-separator">•</span>
+          <span className="info-separator">|</span>
           <span>{bmrgData.states.length} states</span>
-          <span className="info-separator">•</span>
+          <span className="info-separator">|</span>
           <span>
             {plausibleTransitionCount} plausible transitions
             <span className="info-text-muted"> (of {bmrgData.transitions.length} total)</span>

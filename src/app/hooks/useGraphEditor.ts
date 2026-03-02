@@ -17,8 +17,22 @@ import { createImportExportActions } from './graphImportExport';
 import { createVersionActions } from './graphVersions';
 import { createLayoutActions } from './graphLayout';
 
-export function useGraphEditor(): UseGraphEditorResult {
+interface UseGraphEditorOptions {
+    canEdit?: boolean;
+    onReadOnlyAction?: () => void;
+}
+
+export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEditorResult {
+    const canEdit = options.canEdit ?? true;
+    const onReadOnlyAction = options.onReadOnlyAction;
     const state = useGraphBaseState();
+    const blockIfReadOnly = (): boolean => {
+        if (canEdit) {
+            return false;
+        }
+        onReadOnlyAction?.();
+        return true;
+    };
 
     const handleNodeLabelChange = (nodeId: string, newLabel: string) => {
         state.setNodes((prev) => updateNodeLabel(prev, nodeId, newLabel));
@@ -132,15 +146,20 @@ export function useGraphEditor(): UseGraphEditorResult {
         ...node,
         data: {
             ...node.data,
-            onLabelChange: handleNodeLabelChange,
-            onNodeClick: nodeHandlers.handleNodeClick,
-            isEdgeCreationMode: state.edgeCreationMode,
+            onLabelChange: canEdit ? handleNodeLabelChange : undefined,
+            onNodeClick: canEdit ? nodeHandlers.handleNodeClick : undefined,
+            isEdgeCreationMode: canEdit && state.edgeCreationMode,
+            canEdit,
         },
     }));
 
     const stateNameMap = buildStateNameMap(state.bmrgData);
 
     const onConnect: OnConnect = (connection: Connection) => {
+        if (blockIfReadOnly()) {
+            return;
+        }
+
         const flippedConnection: Connection = {
             ...connection,
             source: connection.target,
@@ -157,6 +176,9 @@ export function useGraphEditor(): UseGraphEditorResult {
     };
 
     const handleSaveTransition = (transition: TransitionData) => {
+        if (blockIfReadOnly()) {
+            return;
+        }
         edgeHandlers.handleSaveTransition(transition);
         closeTransitionModal();
     };
@@ -186,29 +208,78 @@ export function useGraphEditor(): UseGraphEditorResult {
         onNodesChange: state.onNodesChange,
         onConnect,
         onEdgeClick: edgeHandlers.onEdgeClick,
-        onEdgeDoubleClick: edgeHandlers.onEdgeDoubleClick,
-        handleEdgesChange: edgeHandlers.handleEdgesChange,
-        handleSaveNode: nodeHandlers.handleSaveNode,
+        onEdgeDoubleClick: canEdit ? edgeHandlers.onEdgeDoubleClick : () => undefined,
+        handleEdgesChange: canEdit ? edgeHandlers.handleEdgesChange : () => undefined,
+        handleSaveNode: (attributes) => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            nodeHandlers.handleSaveNode(attributes);
+        },
         handleSaveTransition,
-        handleDeleteTransition: deleteActions.handleDeleteTransition,
-        handleSaveModel: modelActions.handleSaveModel,
-        handleDeleteState: deleteActions.handleDeleteState,
-        handleDeleteModel: deleteActions.handleDeleteModel,
+        handleDeleteTransition: (transition) => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            void deleteActions.handleDeleteTransition(transition);
+        },
+        handleSaveModel: async () => {
+            if (blockIfReadOnly()) {
+                throw new Error('Model is read-only.');
+            }
+            return modelActions.handleSaveModel();
+        },
+        handleDeleteState: (graphStateId) => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            void deleteActions.handleDeleteState(graphStateId);
+        },
+        handleDeleteModel: () => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            void deleteActions.handleDeleteModel();
+        },
         handleReLayout: modelActions.handleReLayout,
-        applyLayout: layoutActions.applyLayout,
-        toggleEdgeCreationMode: nodeHandlers.toggleEdgeCreationMode,
+        applyLayout: canEdit
+            ? layoutActions.applyLayout
+            : async () => {
+                  blockIfReadOnly();
+              },
+        toggleEdgeCreationMode: () => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            nodeHandlers.toggleEdgeCreationMode();
+        },
         loadExistingEdges: filterActions.loadExistingEdges,
         toggleSelfTransitions: filterActions.toggleSelfTransitions,
         toggleDeltaFilter: filterActions.toggleDeltaFilter,
-        openAddNodeModal: nodeHandlers.openAddNodeModal,
+        openAddNodeModal: () => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            nodeHandlers.openAddNodeModal();
+        },
         closeNodeModal: nodeHandlers.closeNodeModal,
         closeTransitionModal,
-        saveCurrentVersion: versionActions.saveCurrentVersion,
+        saveCurrentVersion: () => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            versionActions.saveCurrentVersion();
+        },
         openVersionManager: versionActions.openVersionManager,
         closeVersionManager: versionActions.closeVersionManager,
         restoreVersion: versionActions.restoreVersion,
         deleteVersion: versionActions.deleteVersion,
         exportToEKS: importExportActions.exportToEKS,
-        importFromEKS: importExportActions.importFromEKS,
+        importFromEKS: async (file) => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            await importExportActions.importFromEKS(file);
+        },
     };
 }

@@ -8,6 +8,7 @@ export type CustomNodeData = {
     onNodeClick?: (id: string) => void;
     isSelected?: boolean; // Added for edge creation highlighting
     isEdgeCreationMode?: boolean; // Added to indicate edge creation mode
+    canEdit?: boolean;
 };
 
 export type PositionLoggerNode = Node<CustomNodeData, 'position-logger'>;
