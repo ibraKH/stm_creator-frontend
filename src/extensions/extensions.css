@@ -1,21 +1,33 @@
-/* === STM Extensions (panels, buttons) === */
+/* ─── EXTENSION PANEL ─── */
 .stm-ext-panel {
   z-index: 20;
 }
 
 .stm-ext-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--node-r);
   padding: 10px 12px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
-  min-width: 280px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.04);
+  min-width: 200px;
+}
+
+/* When inside sidebar, no card border/shadow needed */
+.sidebar .stm-ext-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0 14px 10px;
+  box-shadow: none;
+  min-width: auto;
 }
 
 .stm-ext-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #111827;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
   margin-bottom: 8px;
 }
 
@@ -31,15 +43,30 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .stm-ext-field input[type="number"],
 .stm-ext-field select {
   height: 28px;
   padding: 0 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 6px;
+  background: var(--surface2);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+}
+
+.stm-ext-field input[type="number"]:focus,
+.stm-ext-field select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.stm-ext-field input[type="checkbox"] {
+  accent-color: var(--accent);
 }
 
 .stm-ext-actions {
@@ -50,18 +77,30 @@
 }
 
 .stm-ext-btn {
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
+  border: 1px solid var(--border);
+  background: var(--surface2);
   border-radius: 6px;
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
+  color: var(--text-muted);
+  font-family: inherit;
+  transition: all .15s;
+}
+
+.stm-ext-btn:hover {
+  background: var(--border);
+  color: var(--text);
 }
 
 .stm-ext-btn.primary {
-  background: #2563eb;
-  border-color: #1d4ed8;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
+}
+
+.stm-ext-btn.primary:hover {
+  background: var(--accent-hover);
 }
 
 /* header with collapse button */
@@ -81,26 +120,27 @@
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
-}
-.stm-ext-btn.ghost:hover {
-  background: #f3f4f6;
+  color: var(--text-dim);
 }
 
-/* disable interactions when no transition is selected */
+.stm-ext-btn.ghost:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+/* disabled state */
 .stm-ext-card.is-disabled {
   opacity: 0.85;
 }
+
 .stm-ext-card.is-disabled input,
 .stm-ext-card.is-disabled select,
 .stm-ext-card.is-disabled button.primary {
   pointer-events: none;
 }
 
-
-
 /* === Product Tour (Scheme A: backdrop + light highlight) === */
 
-/* Backdrop dims the whole page and blocks interactions */
 .tour-backdrop {
   position: fixed;
   inset: 0;
@@ -109,72 +149,74 @@
   z-index: 9998;
 }
 
-/* Highlight rectangle around the target (no giant outer shadow) */
 .tour-highlight {
   position: fixed;
   border-radius: 10px;
-  border: 2px solid #4f46e5; /* indigo */
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); /* subtle glow */
+  border: 2px solid var(--accent);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
   pointer-events: none;
   z-index: 9999;
 }
 
-/* Tooltip card shown near the target */
 .tour-tooltip {
   position: fixed;
-  background: #fff;
-  color: #111827;
+  background: var(--surface);
+  color: var(--text);
   border-radius: 12px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.15);
   padding: 14px 16px 12px;
-  z-index: 10000; /* above highlight */
+  z-index: 10000;
   max-width: 360px;
+  border: 1px solid var(--border);
 }
 
-/* Title & body */
 .tour-title {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 14px;
   margin-bottom: 6px;
+  color: var(--text);
 }
 
 .tour-body {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.45;
-  color: #374151;
+  color: var(--text-muted);
 }
 
-/* Small arrow indicating tooltip direction */
 .tour-tooltip .tour-arrow {
   position: absolute;
   width: 12px;
   height: 12px;
-  background: #fff;
+  background: var(--surface);
   transform: rotate(45deg);
+  border: 1px solid var(--border);
 }
 
 .tour-top .tour-arrow {
   bottom: -6px;
   left: 24px;
-  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+  border-top: none;
+  border-left: none;
 }
 .tour-bottom .tour-arrow {
   top: -6px;
   left: 24px;
-  box-shadow: -2px -2px 6px rgba(0, 0, 0, 0.1);
+  border-bottom: none;
+  border-right: none;
 }
 .tour-left .tour-arrow {
   right: -6px;
   top: 24px;
-  box-shadow: 2px -2px 6px rgba(0, 0, 0, 0.1);
+  border-top: none;
+  border-left: none;
 }
 .tour-right .tour-arrow {
   left: -6px;
   top: 24px;
-  box-shadow: -2px 2px 6px rgba(0, 0, 0, 0.1);
+  border-bottom: none;
+  border-right: none;
 }
 
-/* Action row */
 .tour-actions {
   display: flex;
   align-items: center;
@@ -184,8 +226,9 @@
 
 .tour-progress {
   margin-left: auto;
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'DM Mono', monospace;
 }
 
 .tour-nav {
@@ -193,26 +236,41 @@
   gap: 8px;
 }
 
-/* Buttons */
 .tour-btn {
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+
+.tour-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
 }
 
 .tour-btn.primary {
-  background: #4f46e5;
+  background: var(--accent);
   color: #fff;
-  border-color: #4f46e5;
+  border-color: var(--accent);
+}
+
+.tour-btn.primary:hover {
+  background: var(--accent-hover, #15803d);
 }
 
 .tour-btn.ghost {
   background: transparent;
   border: none;
-  color: #6b7280;
+  color: var(--text-dim);
+}
+
+.tour-btn.ghost:hover {
+  color: var(--text-muted);
 }
 
 .tour-btn:disabled {
