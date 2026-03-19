@@ -2,7 +2,6 @@ import {
   Background,
   Controls,
   MiniMap,
-  Panel,
   ReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
@@ -65,6 +64,7 @@ function applyLockInfo(info: ModelLockInfo): LockState {
 function GraphEditor() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isModelListOpen, setIsModelListOpen] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(true);
 
   const [auth, setAuth] = useState<{ token: string; user: AuthUser } | null>(() => {
     const token = authStorage.getToken();
@@ -213,20 +213,20 @@ function GraphEditor() {
     await releaseCurrentLock();
   };
 
-  useEffect(() => {
-    if (!(auth || isGuest)) return;
-    if (isLoading) return;
-    if (onboarding.finished) return;
-
-    const id1 = requestAnimationFrame(() => {
-      const id2 = requestAnimationFrame(() => {
-        setTourOpen(true);
-        onboarding.start();
-      });
-      (globalThis as any).__raf2 = id2;
-    });
-    return () => cancelAnimationFrame(id1);
-  }, [auth, isGuest, isLoading, onboarding]);
+  // Onboarding tour auto-start disabled — keep code for manual replay via Help
+  // useEffect(() => {
+  //   if (!(auth || isGuest)) return;
+  //   if (isLoading) return;
+  //   if (onboarding.finished) return;
+  //   const id1 = requestAnimationFrame(() => {
+  //     const id2 = requestAnimationFrame(() => {
+  //       setTourOpen(true);
+  //       onboarding.start();
+  //     });
+  //     (globalThis as any).__raf2 = id2;
+  //   });
+  //   return () => cancelAnimationFrame(id1);
+  // }, [auth, isGuest, isLoading, onboarding]);
 
   useEffect(() => {
     if (!auth?.token || !modelName) {
@@ -334,8 +334,30 @@ function GraphEditor() {
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState message={error} onRetry={() => globalThis.location.reload()} />;
 
+  const plausibleTransitionCount =
+    bmrgData ? bmrgData.transitions.filter((t) => t.time_25 === 1).length : 0;
+
+  // Count states by VAST class for sidebar legend
+  const classCountMap: Record<string, number> = {};
+  if (bmrgData) {
+    for (const s of bmrgData.states) {
+      const cls = s.vast_state?.vast_class || 'Unknown';
+      classCountMap[cls] = (classCountMap[cls] || 0) + 1;
+    }
+  }
+
+  const legendItems = [
+    { cls: 'Class I', label: 'Reference', bg: '#dcfce7', border: '#86efac' },
+    { cls: 'Class II', label: 'Class II', bg: '#ecfccb', border: '#bef264' },
+    { cls: 'Class III', label: 'Class III', bg: '#fef9c3', border: '#fde047' },
+    { cls: 'Class IV', label: 'Class IV', bg: '#fef3c7', border: '#fcd34d' },
+    { cls: 'Class V', label: 'Class V', bg: '#ffedd5', border: '#fdba74' },
+    { cls: 'Class VI', label: 'Class VI', bg: '#fee2e2', border: '#fca5a5' },
+  ];
+
   return (
     <div className="app-container">
+      {/* ─── TOOLBAR ─── */}
       <div data-tour="toolbar">
         <GraphToolbar
           onAddNode={openAddNodeModal}
@@ -382,56 +404,122 @@ function GraphEditor() {
         />
       </div>
 
-      <ReactFlow
-        nodes={nodesWithCallbacks}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={customEdgeTypes}
-        defaultEdgeOptions={defaultEdgeOptions}
-        onNodesChange={onNodesChange}
-        onEdgesChange={handleEdgesChange}
-        onConnect={onConnect}
-        onEdgeClick={onEdgeClick}
-        onEdgeDoubleClick={onEdgeDoubleClick}
-        edgesFocusable
-        elementsSelectable
-        edgesReconnectable={lockState.canEdit}
-        reconnectRadius={10}
-        fitView
-        fitViewOptions={{ padding: 0.2, includeHiddenNodes: false }}
-        proOptions={{ hideAttribution: true }}
-        minZoom={0.2}
-        maxZoom={2}
-        nodesDraggable={lockState.canEdit}
-        connectOnClick={lockState.canEdit}
-        zoomOnDoubleClick={false}
-        panOnDrag
-        panOnScroll
-        snapToGrid
-        snapGrid={[20, 20]}
-      >
-        <Background />
-        <MiniMap />
-        <Controls />
+      {/* ─── HEADER ─── */}
+      <div className="header-bar">
+        <div className="model-name">{bmrgData?.stm_name || 'STM Creator'}</div>
+        {bmrgData && (
+          <>
+            <div className="meta-pill">
+              <span className="dot dot-green"></span>
+              {bmrgData.states.length} states
+            </div>
+            <div className="meta-pill">
+              <span className="dot dot-amber"></span>
+              {plausibleTransitionCount} / {bmrgData.transitions.length} transitions
+            </div>
+          </>
+        )}
 
-        <Panel
-          position="top-right"
-          style={{ top: 156, right: 8, width: 360, zIndex: 18 }}
-          data-tour="tips"
-        >
-          <TipsPanel />
-        </Panel>
+        {/* Lock status in header */}
+        <div className="meta-pill" style={{ marginLeft: 'auto' }}>
+          <span className="dot" style={{
+            background: lockState.canEdit ? 'var(--accent)' : 'var(--amber)',
+          }} />
+          {lockState.canEdit ? 'Editing' : `Read-only${lockState.holder ? `: ${lockState.holder}` : ''}`}
+        </div>
 
-        <TransitionFilterPanel
-          dataTourId="filters"
-          bmrgData={bmrgData}
-          showSelfTransitions={showSelfTransitions}
-          deltaFilter={deltaFilter}
-          onToggleSelfTransitions={toggleSelfTransitions}
-          onDeltaFilterChange={toggleDeltaFilter}
-          onReset={loadExistingEdges}
-        />
-      </ReactFlow>
+        {/* Auth info in header */}
+        {auth?.user.email && (
+          <div className="meta-pill">
+            {auth.user.email}
+          </div>
+        )}
+      </div>
+
+      {/* ─── WORKSPACE ─── */}
+      <div className="workspace">
+        {/* LEFT SIDEBAR */}
+        <div className="sidebar">
+          <div className="sidebar-section">
+            <div className="sidebar-label">Classes</div>
+            {legendItems.map((item) => (
+              <div className="legend-item" key={item.cls}>
+                <div
+                  className="legend-swatch"
+                  style={{ background: item.bg, border: `1px solid ${item.border}` }}
+                />
+                <span className="legend-text">{item.label}</span>
+                <span className="legend-count">{classCountMap[item.cls] || 0}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="sidebar-divider" />
+
+          {/* Transition Filters in sidebar */}
+          <TransitionFilterPanel
+            bmrgData={bmrgData}
+            showSelfTransitions={showSelfTransitions}
+            deltaFilter={deltaFilter}
+            onToggleSelfTransitions={toggleSelfTransitions}
+            onDeltaFilterChange={toggleDeltaFilter}
+            onReset={loadExistingEdges}
+            inSidebar
+          />
+        </div>
+
+        {/* CANVAS */}
+        <div className="canvas-area">
+          <ReactFlow
+            nodes={nodesWithCallbacks}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={customEdgeTypes}
+            defaultEdgeOptions={defaultEdgeOptions}
+            onNodesChange={onNodesChange}
+            onEdgesChange={handleEdgesChange}
+            onConnect={onConnect}
+            onEdgeClick={onEdgeClick}
+            onEdgeDoubleClick={onEdgeDoubleClick}
+            edgesFocusable
+            elementsSelectable
+            edgesReconnectable={lockState.canEdit}
+            reconnectRadius={10}
+            fitView
+            fitViewOptions={{ padding: 0.2, includeHiddenNodes: false }}
+            proOptions={{ hideAttribution: true }}
+            minZoom={0.2}
+            maxZoom={2}
+            nodesDraggable={lockState.canEdit}
+            connectOnClick={lockState.canEdit}
+            zoomOnDoubleClick={false}
+            panOnDrag
+            panOnScroll
+            snapToGrid
+            snapGrid={[20, 20]}
+          >
+            <Background />
+            <MiniMap />
+            <Controls />
+          </ReactFlow>
+
+          {/* Status bar */}
+          {bmrgData && (
+            <div className="statusbar">
+              <div className="statusbar-dot" />
+              <span>nodes</span> <b>{bmrgData.states.length}</b>
+              <span>transitions</span> <b>{plausibleTransitionCount}</b>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT PANEL (Tips) */}
+        <div className={`right-panel ${tipsOpen ? 'open' : ''}`}>
+          <div className="rp-inner">
+            <TipsPanel onClose={() => setTipsOpen(false)} />
+          </div>
+        </div>
+      </div>
 
       <Tour open={tourOpen} onClose={closeTour} steps={coachSteps} />
 

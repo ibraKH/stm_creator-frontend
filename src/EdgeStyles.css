@@ -1,95 +1,79 @@
 /* Custom styles for edges */
 
 .react-flow__edge-path {
-    stroke-linecap: round;
-    transition: stroke-width 0.2s, stroke 0.2s;
+  stroke-linecap: round;
+  transition: stroke-width 0.2s, stroke 0.2s;
 }
 
 .react-flow__edge-text {
-    font-size: 10px;
-    font-weight: bold;
-    fill: #333;
-    text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+  font-size: 10px;
+  font-weight: 500;
+  fill: var(--text);
+  font-family: 'DM Mono', monospace;
 }
 
 .react-flow__edge:hover .react-flow__edge-path {
-    stroke-width: 3px;
-    filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.2));
+  stroke-width: 3px;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.1));
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-    stroke-width: 3px;
-    filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.4));
+  stroke-width: 3px;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.15));
 }
 
-/* Custom styles for edge interactions */
+/* Edge interactions */
 .edgebutton-foreignobject {
-    pointer-events: none;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  pointer-events: none;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .edgebutton-foreignobject div {
-    pointer-events: auto;
-    transition: transform 0.2s, box-shadow 0.2s;
+  pointer-events: auto;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .react-flow__edge:hover .edgebutton-foreignobject div {
-    transform: scale(1.1);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transform: scale(1.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 /* Edge updater (handles) for reconnecting */
 .react-flow__edge-updater {
-    fill: #fff;
-    stroke: #4a90e2;
-    stroke-width: 1.5;
-    cursor: crosshair;
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  cursor: crosshair;
 }
 
 .react-flow__edge-updater:hover {
-    fill: #4a90e2;
-    stroke-width: 2;
+  fill: var(--accent);
+  stroke-width: 2;
 }
 
 /* Feedback for when edge is being updated */
 .react-flow__edge.updating .react-flow__edge-path {
-    stroke-dasharray: 5;
-    animation: dashdraw 0.5s linear infinite;
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
 }
 
 @keyframes dashdraw {
-    from {
-        stroke-dashoffset: 10;
-    }
-    to {
-        stroke-dashoffset: 0;
-    }
+  from { stroke-dashoffset: 10; }
+  to { stroke-dashoffset: 0; }
 }
 
 /* Highlight edge updater handles with a glow effect */
 .react-flow__edge.selected .react-flow__edge-updater {
-    fill: #fff;
-    stroke: #4a90e2;
-    filter: drop-shadow(0 0 3px rgba(74, 144, 226, 0.8));
+  fill: var(--surface);
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 3px rgba(22, 163, 74, 0.6));
 }
 
 /* Make edge updater handles more visible */
 .react-flow__edge-updater {
-    r: 5; /* Increase the radius of the updater handle */
-}
-
-/* Tooltip for edge handles */
-.react-flow__edge-updater::after {
-    content: '';
-    position: absolute;
-    width: 12px;
-    height: 12px;
-    background-color: rgba(74, 144, 226, 0.2);
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
+  r: 5;
 }

@@ -52,14 +52,11 @@ export function GraphToolbar({
   edgeCreationMode,
   isSaving,
   showSelfTransitions,
-  bmrgData,
   onOpenHelp,
   userEmail,
   onLogout,
   onSignIn,
   canEdit,
-  lockHolder,
-  lockExpiresAt,
   onAcquireLock,
   onReleaseLock,
   onRefreshLock,
@@ -80,11 +77,10 @@ export function GraphToolbar({
     event.target.value = '';
   };
 
-  const plausibleTransitionCount =
-    bmrgData ? bmrgData.transitions.filter((t) => t.time_25 === 1).length : 0;
-
   return (
-    <div className="controls-toolbar" data-tour="toolbar">
+    <div className="toolbar">
+      <span className="toolbar-logo">STM</span>
+
       <input
         ref={fileInputRef}
         type="file"
@@ -96,26 +92,28 @@ export function GraphToolbar({
       <button
         data-tour="add-node"
         onClick={onAddNode}
-        className="button button-primary"
+        className="tb-btn primary"
         disabled={editDisabled}
-        title={editDisabled ? 'Model is locked by another user' : undefined}
       >
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>
         Add Node
       </button>
 
       <button
         data-tour="create-edge"
         onClick={onToggleEdgeCreation}
-        className={`button button-edge-creation ${edgeCreationMode ? 'active' : ''}`}
+        className={`tb-btn ${edgeCreationMode ? 'active' : ''}`}
         disabled={editDisabled}
-        title={editDisabled ? 'Model is locked by another user' : undefined}
       >
-        {edgeCreationMode ? 'Cancel Edge Creation' : 'Create Edge'}
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 8h12M8 2v12"/><circle cx="8" cy="8" r="2"/></svg>
+        {edgeCreationMode ? 'Cancel Edge' : 'Create Edge'}
       </button>
 
-      <button data-tour="load-all-edges" onClick={onLoadEdges} className="button button-secondary">
+      <button data-tour="load-all-edges" onClick={onLoadEdges} className="tb-btn">
         Load All Edges
       </button>
+
+      <div className="tb-sep" />
 
       <button
         data-tour="save-model"
@@ -123,158 +121,122 @@ export function GraphToolbar({
           void onSaveModel().catch(() => undefined);
         }}
         disabled={isSaving || editDisabled}
-        className={`button button-success ${isSaving ? 'button-disabled' : ''}`}
-        title={editDisabled ? 'Model is locked by another user' : undefined}
+        className="tb-btn"
       >
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 12V4l4 4 3-3 5 5"/></svg>
         {isSaving ? 'Saving...' : 'Save Model'}
       </button>
-
-      {onOpenModelList && (
-        <button data-tour="open-model" onClick={onOpenModelList} className="button button-secondary">
-          Open Model
-        </button>
-      )}
-
-      {onDeleteModel && (
-        <button
-          onClick={onDeleteModel}
-          className="button button-danger"
-          title="Delete this model (Admin only)"
-          disabled={editDisabled}
-        >
-          Delete Model
-        </button>
-      )}
 
       <button
         data-tour="save-version"
         onClick={onSaveVersion}
-        className="button button-secondary"
+        className="tb-btn"
         disabled={editDisabled}
-        title={editDisabled ? 'Model is locked by another user' : undefined}
       >
         Save Version
       </button>
 
-      <button data-tour="versions" onClick={onOpenVersionManager} className="button button-secondary">
+      <button data-tour="versions" onClick={onOpenVersionManager} className="tb-btn">
         Versions
       </button>
 
-      <button data-tour="help" onClick={onOpenHelp} className="button button-secondary">
-        Help
-      </button>
+      <div className="tb-sep" />
 
       <button
         data-tour="import-eks"
         onClick={handleImportClick}
-        className="button button-secondary"
+        className="tb-btn"
         disabled={editDisabled}
-        title={editDisabled ? 'Model is locked by another user' : undefined}
       >
         Import EKS
       </button>
 
-      <button data-tour="export-eks" onClick={onExportEKS} className="button button-secondary">
+      <button data-tour="export-eks" onClick={onExportEKS} className="tb-btn">
         Export EKS
       </button>
 
       {onApplyLayout && (
-        <div className="layout-inline">
+        <>
           <select
             value={layout}
             onChange={(e) => setLayout(e.target.value as LayoutStrategy)}
-            className="button button-secondary select-like-btn"
-            title="Layout"
+            className="tb-btn"
+            style={{ paddingRight: 24, appearance: 'auto' as any }}
             disabled={editDisabled}
           >
-            <option value="layered">Layered (directed)</option>
+            <option value="layered">Layered</option>
             <option value="grid">Grid</option>
-            <option value="force">Force-directed</option>
-            <option value="heuristic">Heuristic (project)</option>
+            <option value="force">Force</option>
+            <option value="heuristic">Heuristic</option>
           </select>
-
           <button
             data-tour="apply-layout"
             onClick={() => {
               if (layout === 'heuristic') {
                 onRelayout();
-              } else if (onApplyLayout) {
+              } else {
                 void onApplyLayout(layout);
               }
             }}
-            className="button button-secondary"
+            className="tb-btn"
             disabled={editDisabled}
-            title={editDisabled ? 'Model is locked by another user' : undefined}
           >
-            Apply Layout
-          </button>
-        </div>
-      )}
-
-      <div style={{ flex: 1 }} />
-
-      {userEmail ? (
-        <>
-          <span className="info-panel" style={{ padding: '8px 10px' }}>
-            Signed in as {userEmail}
-          </span>
-          <button onClick={onLogout} className="button button-secondary">
-            Logout
-          </button>
-        </>
-      ) : (
-        <>
-          <span className="info-panel" style={{ padding: '8px 10px' }}>
-            Guest mode
-          </span>
-          <button onClick={onSignIn} className="button button-primary">
-            Sign in
+            Re-layout
           </button>
         </>
       )}
 
-      <span className="info-panel" style={{ padding: '8px 10px' }}>
-        {canEdit ? 'Edit lock acquired' : `Read-only${lockHolder ? `: ${lockHolder}` : ''}`}
-        {lockExpiresAt ? ` (expires ${new Date(lockExpiresAt).toLocaleTimeString()})` : ''}
-      </span>
+      <div className="tb-sep" />
 
+      <button
+        onClick={onToggleSelfTransitions}
+        className={`tb-btn ${showSelfTransitions ? 'active' : ''}`}
+      >
+        {showSelfTransitions ? 'Hide Self-Trans' : 'Show Self-Trans'}
+      </button>
+
+      {onOpenModelList && (
+        <button data-tour="open-model" onClick={onOpenModelList} className="tb-btn">
+          Open Model
+        </button>
+      )}
+
+      {onDeleteModel && (
+        <button onClick={onDeleteModel} className="tb-btn" disabled={editDisabled} style={{ color: 'var(--red)' }}>
+          Delete
+        </button>
+      )}
+
+      <div className="tb-spacer" />
+
+      {/* Lock controls */}
       {!canEdit && onAcquireLock && (
-        <button onClick={onAcquireLock} className="button button-primary">
-          Request Edit Lock
+        <button onClick={onAcquireLock} className="tb-btn primary">
+          Request Lock
         </button>
       )}
 
       {canEdit && onRefreshLock && (
-        <button onClick={onRefreshLock} className="button button-secondary">
-          Refresh Lock
-        </button>
+        <button onClick={onRefreshLock} className="tb-btn">Refresh Lock</button>
       )}
 
       {canEdit && onReleaseLock && (
-        <button onClick={onReleaseLock} className="button button-secondary">
-          Release Lock
-        </button>
+        <button onClick={onReleaseLock} className="tb-btn">Release Lock</button>
       )}
 
-      <button
-        onClick={onToggleSelfTransitions}
-        className={`button ${showSelfTransitions ? 'button-info' : 'button-secondary'}`}
-      >
-        {showSelfTransitions ? 'Hide Self Transitions' : 'Show Self Transitions'}
+      <div className="tb-sep" />
+
+      {/* Auth */}
+      {userEmail ? (
+        <button onClick={onLogout} className="tb-btn">Logout</button>
+      ) : (
+        <button onClick={onSignIn} className="tb-btn primary">Sign in</button>
+      )}
+
+      <button data-tour="help" onClick={onOpenHelp} className="tb-btn">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5.5v.5"/></svg>
+        Help
       </button>
-
-      {bmrgData && (
-        <div className="info-panel">
-          <strong>{bmrgData.stm_name}</strong>
-          <span className="info-separator">|</span>
-          <span>{bmrgData.states.length} states</span>
-          <span className="info-separator">|</span>
-          <span>
-            {plausibleTransitionCount} plausible transitions
-            <span className="info-text-muted"> (of {bmrgData.transitions.length} total)</span>
-          </span>
-        </div>
-      )}
     </div>
   );
 }
