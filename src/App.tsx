@@ -37,6 +37,7 @@ import {
   renewModelLock,
   type ModelLockInfo,
 } from './app/api/locks';
+import { connectCollabSocket, disconnectCollabSocket } from './collab/socket';
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
 
@@ -230,12 +231,18 @@ function GraphEditor() {
 
   useEffect(() => {
     if (!auth?.token || !modelName) {
+      disconnectCollabSocket();
       setLockState({ canEdit: false, lockId: null, holder: null, expiresAt: null });
       lockRef.current = { modelName, lockId: null };
       return;
     }
 
     let cancelled = false;
+
+    connectCollabSocket({
+      token: auth.token,
+      modelName,
+    });
 
     const setupLock = async () => {
       try {
@@ -264,6 +271,7 @@ function GraphEditor() {
 
     return () => {
       cancelled = true;
+      disconnectCollabSocket();
       void releaseCurrentLock();
     };
   }, [auth?.token, modelName]);
@@ -393,6 +401,7 @@ function GraphEditor() {
             void handleReleaseLock();
           }}
           onLogout={() => {
+            disconnectCollabSocket();
             void releaseCurrentLock();
             authStorage.clear();
             setAuth(null);
