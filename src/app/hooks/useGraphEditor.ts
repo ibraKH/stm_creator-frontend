@@ -20,11 +20,21 @@ import { createLayoutActions } from './graphLayout';
 interface UseGraphEditorOptions {
     canEdit?: boolean;
     onReadOnlyAction?: () => void;
+    requestNodeEdit?: (nodeId: string) => Promise<boolean>;
+    nodeLocks?: Record<
+        string,
+        {
+            lockOwner?: string | null;
+            lockColor?: string | null;
+            ownedByMe?: boolean;
+        }
+    >;
 }
 
 export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEditorResult {
     const canEdit = options.canEdit ?? true;
     const onReadOnlyAction = options.onReadOnlyAction;
+    const nodeLocks = options.nodeLocks ?? {};
     const state = useGraphBaseState();
     const blockIfReadOnly = (): boolean => {
         if (canEdit) {
@@ -82,6 +92,7 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
         getCurrentNodeId: () => state.currentNodeId,
         setData: state.setBmrgData,
         handleNodeLabelChange,
+        requestNodeEdit: options.requestNodeEdit,
     });
 
     const filterActions = createFilterActions({
@@ -150,6 +161,11 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
             onNodeClick: canEdit ? nodeHandlers.handleNodeClick : undefined,
             isEdgeCreationMode: canEdit && state.edgeCreationMode,
             canEdit,
+            enableInlineEdit: false,
+            isLocked: Boolean(nodeLocks[node.id]),
+            isLockedByMe: Boolean(nodeLocks[node.id]?.ownedByMe),
+            lockOwner: nodeLocks[node.id]?.lockOwner ?? null,
+            lockColor: nodeLocks[node.id]?.lockColor ?? null,
         },
     }));
 

@@ -22,6 +22,47 @@
   z-index: 10 !important;
 }
 
+.node-locked {
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.28), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.node-locked-me {
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.32), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.node-locked-other {
+  opacity: 0.92;
+}
+
+.node-lock-indicator {
+  position: absolute;
+  top: -14px;
+  left: 10px;
+  max-width: 170px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #374151;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  z-index: 6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-lock-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
 /* ─── NODE HEADER ─── */
 .node-header {
   padding: 7px 10px 6px;

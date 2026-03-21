@@ -30,13 +30,14 @@ import './extensions/extensions.css';
 
 import AuthPage from './app/auth/AuthPage';
 import { authStorage, type AuthUser } from './app/auth/api';
+import { parseStateId } from './app/hooks/graph-utils';
 import {
-  acquireModelLock,
-  getModelLock,
-  releaseModelLock,
-  renewModelLock,
-  type ModelLockInfo,
-} from './app/api/locks';
+  connectCollabSocket,
+  disconnectCollabSocket,
+  emitNodeLockAcquire,
+  emitNodeLockRelease,
+  subscribeNodeLockEvents,
+} from './collab/socket';
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
 
@@ -44,22 +45,15 @@ import { Tour } from './extensions/onboarding/Tour';
 import { coachSteps } from './extensions/onboarding/coachmarks';
 import { useOnboarding } from './extensions/onboarding/useOnboarding';
 
-type LockState = {
-  canEdit: boolean;
-  lockId: string | null;
-  holder: string | null;
-  expiresAt: string | null;
-};
-
-function applyLockInfo(info: ModelLockInfo): LockState {
-  const owner = info.owner ?? Boolean(info.lockId);
-  return {
-    canEdit: owner,
-    lockId: owner ? info.lockId ?? null : null,
-    holder: info.lockedBy ?? null,
-    expiresAt: info.expiresAt ?? null,
-  };
-}
+type NodeLockState = Record<
+  string,
+  {
+    entityId: number;
+    lockOwner: string | null;
+    lockColor: string | null;
+    ownedByMe: boolean;
+  }
+>;
 
 function GraphEditor() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -72,16 +66,10 @@ function GraphEditor() {
     return token && user ? { token, user } : null;
   });
   const [isGuest, setIsGuest] = useState(false);
-
-  const [lockState, setLockState] = useState<LockState>({
-    canEdit: false,
-    lockId: null,
-    holder: null,
-    expiresAt: null,
-  });
-  const lockRef = useRef<{ modelName: string | null; lockId: string | null }>({
-    modelName: null,
-    lockId: null,
+  const [nodeLocks, setNodeLocks] = useState<NodeLockState>({});
+  const activeNodeLockRef = useRef<{ nodeId: string | null; entityId: number | null }>({
+    nodeId: null,
+    entityId: null,
   });
 
   const onboarding = useOnboarding();
@@ -90,6 +78,102 @@ function GraphEditor() {
   const closeTour = () => {
     setTourOpen(false);
     onboarding.complete();
+  };
+
+  const modelNameFromLocks = useRef<string | null>(null);
+  const baseCanEdit = Boolean(auth || isGuest);
+
+  const releaseActiveNodeLock = (reasonModelName?: string | null) => {
+    const activeNodeId = activeNodeLockRef.current.nodeId;
+    const activeEntityId = activeNodeLockRef.current.entityId;
+    const effectiveModelName = reasonModelName ?? modelNameFromLocks.current;
+    if (!activeNodeId || !activeEntityId || !effectiveModelName) {
+      activeNodeLockRef.current = { nodeId: null, entityId: null };
+      return;
+    }
+
+    emitNodeLockRelease(effectiveModelName, activeEntityId);
+    activeNodeLockRef.current = { nodeId: null, entityId: null };
+    setNodeLocks((prev) => {
+      const next = { ...prev };
+      delete next[activeNodeId];
+      return next;
+    });
+  };
+
+  const requestNodeEdit = async (nodeId: string): Promise<boolean> => {
+    if (!baseCanEdit) {
+      window.alert('Please sign in or continue as guest to edit nodes.');
+      return false;
+    }
+
+    const entityId = parseStateId(nodeId);
+    if (!auth?.token || !modelName || entityId === null) {
+      return true;
+    }
+
+    const existing = nodeLocks[nodeId];
+    if (existing?.ownedByMe) {
+      activeNodeLockRef.current = { nodeId, entityId };
+      return true;
+    }
+
+    if (existing && !existing.ownedByMe) {
+      window.alert(`Node is currently being edited by ${existing.lockOwner ?? 'another user'}.`);
+      return false;
+    }
+
+    releaseActiveNodeLock(modelName);
+
+    return await new Promise<boolean>((resolve) => {
+      let settled = false;
+      let unsubscribe: () => void = () => {};
+
+      const finish = (allowed: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        globalThis.clearTimeout(timeout);
+        unsubscribe();
+        resolve(allowed);
+      };
+
+      unsubscribe = subscribeNodeLockEvents({
+        onAcquired: (payload) => {
+          if (payload.entityType !== 'node' || payload.entityId !== entityId || payload.modelName !== modelName) {
+            return;
+          }
+          setNodeLocks((prev) => ({
+            ...prev,
+            [nodeId]: {
+              entityId,
+              lockOwner: payload.lockedBy ?? auth.user.email,
+              lockColor: payload.color ?? '#22c55e',
+              ownedByMe: payload.userId === Number(auth.user.id),
+            },
+          }));
+          if (payload.userId === Number(auth.user.id)) {
+            activeNodeLockRef.current = { nodeId, entityId };
+            finish(true);
+          }
+        },
+        onDenied: (payload) => {
+          if (payload.entityType !== 'node' || payload.entityId !== entityId || payload.modelName !== modelName) {
+            return;
+          }
+          window.alert(`Node is currently being edited by ${payload.lockedBy ?? 'another user'}.`);
+          finish(false);
+        },
+      });
+
+      const timeout = globalThis.setTimeout(() => {
+        unsubscribe();
+        window.alert('Unable to acquire node lock from collaboration service.');
+        resolve(false);
+      }, 2000);
+      emitNodeLockAcquire(modelName, entityId);
+    });
   };
 
   const {
@@ -142,76 +226,15 @@ function GraphEditor() {
     exportToEKS,
     importFromEKS,
   } = useGraphEditor({
-    canEdit: lockState.canEdit,
+    canEdit: baseCanEdit,
     onReadOnlyAction: () => {
-      window.alert('Model is locked by another user. You currently have read-only access.');
+      window.alert('You do not currently have permission to edit this view.');
     },
+    requestNodeEdit,
+    nodeLocks,
   });
 
   const modelName = bmrgData?.stm_name?.trim() || null;
-
-  const releaseCurrentLock = async () => {
-    const currentModel = lockRef.current.modelName;
-    const currentLockId = lockRef.current.lockId;
-    if (!currentModel || !currentLockId) {
-      return;
-    }
-    try {
-      await releaseModelLock(currentModel, currentLockId);
-    } catch {
-      // ignore release failure on unload/logout
-    }
-    lockRef.current = { modelName: currentModel, lockId: null };
-    setLockState((prev) => ({ ...prev, canEdit: false, lockId: null }));
-  };
-
-  const handleAcquireLock = async () => {
-    if (!modelName) {
-      return;
-    }
-    if (!auth?.token) {
-      window.alert('Please sign in to request edit lock.');
-      return;
-    }
-
-    try {
-      const info = await acquireModelLock(modelName);
-      const next = applyLockInfo(info);
-      setLockState(next);
-      lockRef.current = { modelName, lockId: next.lockId };
-    } catch (error_) {
-      const message = error_ instanceof Error ? error_.message : 'Unable to acquire lock.';
-      try {
-        const status = await getModelLock(modelName);
-        const next = applyLockInfo(status);
-        setLockState(next);
-      } catch {
-        setLockState({ canEdit: false, lockId: null, holder: null, expiresAt: null });
-      }
-      window.alert(message);
-    }
-  };
-
-  const handleRefreshLock = async () => {
-    if (!modelName || !lockState.lockId) {
-      return;
-    }
-    try {
-      const info = await renewModelLock(modelName, lockState.lockId);
-      const next = applyLockInfo(info);
-      setLockState(next);
-      lockRef.current = { modelName, lockId: next.lockId };
-    } catch (error_) {
-      const message = error_ instanceof Error ? error_.message : 'Failed to refresh lock.';
-      setLockState((prev) => ({ ...prev, canEdit: false, lockId: null }));
-      lockRef.current = { modelName, lockId: null };
-      window.alert(message);
-    }
-  };
-
-  const handleReleaseLock = async () => {
-    await releaseCurrentLock();
-  };
 
   // Onboarding tour auto-start disabled — keep code for manual replay via Help
   // useEffect(() => {
@@ -229,74 +252,63 @@ function GraphEditor() {
   // }, [auth, isGuest, isLoading, onboarding]);
 
   useEffect(() => {
+    modelNameFromLocks.current = modelName;
+
     if (!auth?.token || !modelName) {
-      setLockState({ canEdit: false, lockId: null, holder: null, expiresAt: null });
-      lockRef.current = { modelName, lockId: null };
+      disconnectCollabSocket();
+      setNodeLocks({});
+      activeNodeLockRef.current = { nodeId: null, entityId: null };
       return;
     }
 
-    let cancelled = false;
+    connectCollabSocket({
+      token: auth.token,
+      modelName,
+    });
 
-    const setupLock = async () => {
-      try {
-        const info = await acquireModelLock(modelName);
-        if (cancelled) return;
-        const next = applyLockInfo(info);
-        setLockState(next);
-        lockRef.current = { modelName, lockId: next.lockId };
-      } catch {
-        try {
-          const status = await getModelLock(modelName);
-          if (cancelled) return;
-          const next = applyLockInfo(status);
-          setLockState(next);
-          lockRef.current = { modelName, lockId: next.lockId };
-        } catch {
-          if (!cancelled) {
-            setLockState({ canEdit: false, lockId: null, holder: null, expiresAt: null });
-            lockRef.current = { modelName, lockId: null };
-          }
+    const unsubscribe = subscribeNodeLockEvents({
+      onAcquired: (payload) => {
+        if (payload.entityType !== 'node' || payload.modelName !== modelName) {
+          return;
         }
-      }
-    };
-
-    void setupLock();
+        const nodeId = `state-${payload.entityId}`;
+        setNodeLocks((prev) => ({
+          ...prev,
+          [nodeId]: {
+            entityId: payload.entityId,
+            lockOwner: payload.lockedBy ?? null,
+            lockColor: payload.color ?? '#f59e0b',
+            ownedByMe: payload.userId === Number(auth.user.id),
+          },
+        }));
+      },
+      onReleased: (payload) => {
+        if (payload.entityType !== 'node' || payload.modelName !== modelName) {
+          return;
+        }
+        const nodeId = `state-${payload.entityId}`;
+        setNodeLocks((prev) => {
+          const next = { ...prev };
+          delete next[nodeId];
+          return next;
+        });
+        if (activeNodeLockRef.current.entityId === payload.entityId) {
+          activeNodeLockRef.current = { nodeId: null, entityId: null };
+        }
+      },
+    });
 
     return () => {
-      cancelled = true;
-      void releaseCurrentLock();
+      unsubscribe();
+      releaseActiveNodeLock(modelName);
+      disconnectCollabSocket();
+      setNodeLocks({});
     };
-  }, [auth?.token, modelName]);
-
-  useEffect(() => {
-    if (!modelName || !lockState.canEdit || !lockState.lockId) {
-      return;
-    }
-
-    const timer = globalThis.setInterval(() => {
-      void renewModelLock(modelName, lockState.lockId as string)
-        .then((info) => {
-          const next = applyLockInfo(info);
-          setLockState(next);
-          lockRef.current = { modelName, lockId: next.lockId };
-        })
-        .catch(() => {
-          setLockState((prev) => ({ ...prev, canEdit: false, lockId: null }));
-          lockRef.current = { modelName, lockId: null };
-        });
-    }, 20000);
-
-    return () => globalThis.clearInterval(timer);
-  }, [modelName, lockState.canEdit, lockState.lockId]);
+  }, [auth?.token, auth?.user.id, modelName]);
 
   useEffect(() => {
     const onBeforeUnload = () => {
-      const currentModel = lockRef.current.modelName;
-      const currentLockId = lockRef.current.lockId;
-      if (!currentModel || !currentLockId) {
-        return;
-      }
-      void releaseModelLock(currentModel, currentLockId);
+      releaseActiveNodeLock(modelNameFromLocks.current);
     };
 
     globalThis.addEventListener('beforeunload', onBeforeUnload);
@@ -380,23 +392,14 @@ function GraphEditor() {
           onOpenHelp={() => setIsHelpOpen(true)}
           userEmail={auth?.user.email ?? null}
           isGuest={isGuest}
-          canEdit={lockState.canEdit}
-          lockHolder={lockState.holder}
-          lockExpiresAt={lockState.expiresAt}
-          onAcquireLock={() => {
-            void handleAcquireLock();
-          }}
-          onRefreshLock={() => {
-            void handleRefreshLock();
-          }}
-          onReleaseLock={() => {
-            void handleReleaseLock();
-          }}
+          canEdit={baseCanEdit}
           onLogout={() => {
-            void releaseCurrentLock();
+            releaseActiveNodeLock(modelName);
+            disconnectCollabSocket();
             authStorage.clear();
             setAuth(null);
             setIsGuest(false);
+            setNodeLocks({});
           }}
           onSignIn={() => {
             setIsGuest(false);
@@ -423,9 +426,9 @@ function GraphEditor() {
         {/* Lock status in header */}
         <div className="meta-pill" style={{ marginLeft: 'auto' }}>
           <span className="dot" style={{
-            background: lockState.canEdit ? 'var(--accent)' : 'var(--amber)',
+            background: baseCanEdit ? 'var(--accent)' : 'var(--amber)',
           }} />
-          {lockState.canEdit ? 'Editing' : `Read-only${lockState.holder ? `: ${lockState.holder}` : ''}`}
+          {baseCanEdit ? 'Node-level editing' : 'Read-only'}
         </div>
 
         {/* Auth info in header */}
@@ -483,15 +486,15 @@ function GraphEditor() {
             onEdgeDoubleClick={onEdgeDoubleClick}
             edgesFocusable
             elementsSelectable
-            edgesReconnectable={lockState.canEdit}
+            edgesReconnectable={baseCanEdit}
             reconnectRadius={10}
             fitView
             fitViewOptions={{ padding: 0.2, includeHiddenNodes: false }}
             proOptions={{ hideAttribution: true }}
             minZoom={0.2}
             maxZoom={2}
-            nodesDraggable={lockState.canEdit}
-            connectOnClick={lockState.canEdit}
+            nodesDraggable={baseCanEdit}
+            connectOnClick={baseCanEdit}
             zoomOnDoubleClick={false}
             panOnDrag
             panOnScroll
@@ -527,8 +530,14 @@ function GraphEditor() {
 
       <NodeModal
         isOpen={isNodeModalOpen}
-        onClose={closeNodeModal}
-        onSave={handleSaveNode}
+        onClose={() => {
+          releaseActiveNodeLock(modelName);
+          closeNodeModal();
+        }}
+        onSave={(attributes) => {
+          handleSaveNode(attributes);
+          releaseActiveNodeLock(modelName);
+        }}
         onDelete={() => {
           const raw = initialNodeValues?.id ?? '';
           const idStr = raw.startsWith('state-') ? raw.replace('state-', '') : raw.replace('node-', '');
@@ -536,6 +545,7 @@ function GraphEditor() {
           if (!Number.isNaN(graphId)) {
             handleDeleteState(graphId);
           }
+          releaseActiveNodeLock(modelName);
         }}
         initialValues={initialNodeValues}
         isEditing={isEditing}

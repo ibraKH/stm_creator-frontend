@@ -33,6 +33,8 @@ export function CustomNode({ data, id }: CustomNodeProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [nodeLabel, setNodeLabel] = useState(data.label);
     const canEdit = data.canEdit !== false;
+    const inlineEditEnabled = data.enableInlineEdit === true;
+    const isLockedByOther = Boolean(data.isLocked && !data.isLockedByMe);
 
     const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setNodeLabel(event.target.value);
@@ -53,7 +55,7 @@ export function CustomNode({ data, id }: CustomNodeProps) {
 
     const onNodeDoubleClick = (event: React.MouseEvent) => {
         event.stopPropagation();
-        if (!canEdit) {
+        if (!canEdit || !inlineEditEnabled || isLockedByOther) {
             return;
         }
         setIsEditing(true);
@@ -84,9 +86,22 @@ export function CustomNode({ data, id }: CustomNodeProps) {
         <div
             onClick={handleNodeClick}
             onDoubleClick={onNodeDoubleClick}
-            className={`node-container class-color-${classNum}`}
+            className={`node-container class-color-${classNum}${data.isLocked ? ' node-locked' : ''}${data.isLockedByMe ? ' node-locked-me' : ''}${isLockedByOther ? ' node-locked-other' : ''}`}
             style={containerStyle}
         >
+            {data.isLocked && (
+                <div
+                    className="node-lock-indicator"
+                    style={{ borderColor: data.lockColor ?? '#f59e0b' }}
+                    title={data.isLockedByMe ? 'You are editing this node' : `Locked by ${data.lockOwner ?? 'another user'}`}
+                >
+                    <span
+                        className="node-lock-dot"
+                        style={{ backgroundColor: data.lockColor ?? '#f59e0b' }}
+                    />
+                    {data.isLockedByMe ? 'Editing' : `Locked${data.lockOwner ? `: ${data.lockOwner}` : ''}`}
+                </div>
+            )}
             {isEditing ? (
                 <div className="node-body">
                     <input
