@@ -33,6 +33,7 @@ interface Dependencies {
     getCurrentNodeId: () => string | null;
     setData: Dispatch<SetStateAction<BMRGData | null>>;
     handleNodeLabelChange: (nodeId: string, label: string) => void;
+    requestNodeEdit?: (nodeId: string) => Promise<boolean>;
 }
 
 export function createNodeHandlers({
@@ -51,6 +52,7 @@ export function createNodeHandlers({
     getCurrentNodeId,
     setData,
     handleNodeLabelChange,
+    requestNodeEdit,
 }: Dependencies) {
     const handleNodeClick = (nodeId: string) => {
         if (getEdgeCreationMode()) {
@@ -73,10 +75,17 @@ export function createNodeHandlers({
             return;
         }
 
-        setCurrentNodeId(nodeId);
-        setInitialNodeValues(deriveModalValues(node));
-        setIsEditing(true);
-        setIsNodeModalOpen(true);
+        void (async () => {
+            const allowed = requestNodeEdit ? await requestNodeEdit(nodeId) : true;
+            if (!allowed) {
+                return;
+            }
+
+            setCurrentNodeId(nodeId);
+            setInitialNodeValues(deriveModalValues(node));
+            setIsEditing(true);
+            setIsNodeModalOpen(true);
+        })();
     };
 
     const handleNodeLabelChangeInternal = (nodeId: string, newLabel: string) => {

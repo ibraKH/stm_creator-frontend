@@ -35,12 +35,31 @@ export type ViewportUpdatePayload = {
   zoom: number;
 };
 
+export type LockEventPayload = {
+  entityType: 'node' | string;
+  entityId: number;
+  modelName: string;
+  userId?: number;
+  lockedBy?: string;
+  color?: string;
+};
+
+export type LockDeniedPayload = {
+  entityType: 'node' | string;
+  entityId: number;
+  modelName: string;
+  lockedBy?: string;
+};
+
 type ServerToClientEvents = {
   'presence:sync': (payload: PresenceSyncPayload) => void;
   'presence:join': (payload: PresenceJoinPayload) => void;
   'presence:leave': (payload: PresenceLeavePayload) => void;
   'cursor:move': (payload: CursorMovePayload) => void;
   'viewport:update': (payload: ViewportUpdatePayload) => void;
+  'lock:acquired': (payload: LockEventPayload) => void;
+  'lock:released': (payload: LockEventPayload) => void;
+  'lock:denied': (payload: LockDeniedPayload) => void;
   'error:validation': (payload: { message?: string }) => void;
 };
 
@@ -48,6 +67,8 @@ type ClientToServerEvents = {
   'room:join': (payload: { modelName: string }) => void;
   'cursor:move': (payload: { modelName: string; x: number; y: number }) => void;
   'viewport:update': (payload: { modelName: string; x: number; y: number; zoom: number }) => void;
+  'lock:acquire': (payload: { entityType: 'node'; entityId: number; modelName: string }) => void;
+  'lock:release': (payload: { entityType: 'node'; entityId: number; modelName: string }) => void;
 };
 
 type CollabSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -139,4 +160,37 @@ export function disconnectCollabSocket(): void {
 
 export function getCollabSocket(): CollabSocket | null {
   return socket;
+}
+
+export function emitNodeLockAcquire(modelName: string, entityId: number): void {
+  socket?.emit('lock:acquire', { entityType: 'node', entityId, modelName });
+}
+
+export function emitNodeLockRelease(modelName: string, entityId: number): void {
+  socket?.emit('lock:release', { entityType: 'node', entityId, modelName });
+}
+
+export function subscribeNodeLockEvents(handlers: {
+  onAcquired?: (payload: LockEventPayload) => void;
+  onReleased?: (payload: LockEventPayload) => void;
+  onDenied?: (payload: LockDeniedPayload) => void;
+}): () => void {
+  const activeSocket = socket;
+  if (!activeSocket) {
+    return () => undefined;
+  }
+
+  const handleAcquired = (payload: LockEventPayload) => handlers.onAcquired?.(payload);
+  const handleReleased = (payload: LockEventPayload) => handlers.onReleased?.(payload);
+  const handleDenied = (payload: LockDeniedPayload) => handlers.onDenied?.(payload);
+
+  activeSocket.on('lock:acquired', handleAcquired);
+  activeSocket.on('lock:released', handleReleased);
+  activeSocket.on('lock:denied', handleDenied);
+
+  return () => {
+    activeSocket.off('lock:acquired', handleAcquired);
+    activeSocket.off('lock:released', handleReleased);
+    activeSocket.off('lock:denied', handleDenied);
+  };
 }
