@@ -377,6 +377,7 @@ function GraphEditor() {
           onLoadEdges={loadExistingEdges}
           onSaveModel={handleSaveModel}
           onOpenModelList={() => setIsModelListOpen(true)}
+          onCreateNewModel={handleCreateNewModel}
           onDeleteModel={handleDeleteModel}
           onApplyLayout={applyLayout}
           onSaveVersion={saveCurrentVersion}
