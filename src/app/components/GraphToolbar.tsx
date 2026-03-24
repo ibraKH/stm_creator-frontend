@@ -10,6 +10,8 @@ interface GraphToolbarProps {
   readonly onLoadEdges: () => void;
   readonly onSaveModel: () => Promise<SaveModelResponse>;
   readonly onOpenModelList?: () => void;
+  /** Callback to create a new model; receives the model name from the modal input */
+  readonly onCreateNewModel?: (modelName: string) => void;
   readonly onDeleteModel?: () => void;
   readonly onSaveVersion: () => void;
   readonly onOpenVersionManager: () => void;
@@ -41,6 +43,7 @@ export function GraphToolbar({
   onLoadEdges,
   onSaveModel,
   onOpenModelList,
+  onCreateNewModel,
   onDeleteModel,
   onRelayout,
   onApplyLayout,
@@ -63,6 +66,10 @@ export function GraphToolbar({
 }: GraphToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [layout, setLayout] = useState<LayoutStrategy>('force');
+  // Controls visibility of the "Create New Model" modal dialog
+  const [showNewModelModal, setShowNewModelModal] = useState(false);
+  // Tracks the model name input inside the new-model modal
+  const [newModelName, setNewModelName] = useState('');
   const editDisabled = !canEdit;
 
   const handleImportClick = () => {
@@ -199,6 +206,97 @@ export function GraphToolbar({
         <button data-tour="open-model" onClick={onOpenModelList} className="tb-btn">
           Open Model
         </button>
+      )}
+
+      {onCreateNewModel && (
+        <button
+          data-tour="new-model"
+          onClick={() => setShowNewModelModal(true)}
+          className="tb-btn"
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>
+          New Model
+        </button>
+      )}
+
+      {/* New Model modal — overlay + centred dialog for entering a new model name.
+          Supports Enter to confirm, Escape to cancel, and backdrop click to dismiss. */}
+      {showNewModelModal && onCreateNewModel && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 1200,
+          }}
+          onClick={() => { setShowNewModelModal(false); setNewModelName(''); }}
+        >
+          <div
+            style={{
+              backgroundColor: '#fff', borderRadius: 12, padding: 24,
+              width: 420, maxWidth: '90%',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600, color: '#064e3b' }}>
+              Create New Model
+            </h3>
+            <label style={{ display: 'block', fontSize: 13, color: '#065f46', marginBottom: 6 }}>
+              Model Name
+            </label>
+            <input
+              type="text"
+              value={newModelName}
+              onChange={(e) => setNewModelName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newModelName.trim()) {
+                  onCreateNewModel(newModelName.trim());
+                  setNewModelName('');
+                  setShowNewModelModal(false);
+                }
+                if (e.key === 'Escape') {
+                  setNewModelName('');
+                  setShowNewModelModal(false);
+                }
+              }}
+              placeholder="Enter model name…"
+              autoFocus
+              style={{
+                width: '100%', padding: '10px 12px', borderRadius: 8,
+                border: '1px solid #F0D9A6', fontSize: 14, color: '#065f46', outline: 'none',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button
+                onClick={() => { setShowNewModelModal(false); setNewModelName(''); }}
+                style={{
+                  padding: '8px 18px', background: '#fff', color: '#065f46',
+                  border: '1px solid #F0D9A6', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (newModelName.trim()) {
+                    onCreateNewModel(newModelName.trim());
+                    setNewModelName('');
+                    setShowNewModelModal(false);
+                  }
+                }}
+                style={{
+                  padding: '8px 18px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  color: '#fff', border: 'none', borderRadius: 8,
+                  cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {onDeleteModel && (

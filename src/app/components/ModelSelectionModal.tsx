@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { API_BASE, getAuthHeader } from '../auth/api';
 
+/**
+ * Props for ModelSelectionModal.
+ * - isOpen: controls modal visibility
+ * - onClose: called when the user dismisses the modal
+ * - onCreateNew: called with the model name when creating a new model
+ * - onLoadExisting: called with the model name when opening an existing model
+ */
 interface Props {
   readonly isOpen: boolean;
   readonly onClose: () => void;
@@ -8,13 +15,35 @@ interface Props {
   readonly onLoadExisting: (modelName: string) => void;
 }
 
+/**
+ * ModelSelectionModal — displayed after login to let the user pick a model.
+ *
+ * Two sections:
+ *   1. Existing Models List — fetched from GET /models/all (same API as
+ *      the toolbar's "Open Model" button in ModelListModal). Clicking a
+ *      model triggers onLoadExisting, which navigates to /editor?model={name}.
+ *   2. Create New Model — text input + "Create" button. Submitting triggers
+ *      onCreateNew, which navigates to /editor?model={name} (the backend
+ *      auto-creates an empty model when the name doesn't exist yet).
+ */
 export function ModelSelectionModal({ isOpen, onClose, onCreateNew, onLoadExisting }: Props) {
+  // Input value for the "create new model" text field
   const [modelName, setModelName] = useState('');
+  // Validation error for the create-new input
   const [error, setError] = useState<string | null>(null);
+  // List of existing model names returned by the API
   const [models, setModels] = useState<string[]>([]);
+  // Loading state while fetching the model list
   const [listLoading, setListLoading] = useState(false);
+  // Error message if the model list fetch fails
   const [listError, setListError] = useState<string | null>(null);
 
+  /**
+   * Fetch all existing models from the API whenever the modal opens.
+   * Uses the same endpoint (GET /models/all) as ModelListModal in the toolbar.
+   * A cleanup flag (`cancelled`) prevents state updates if the modal closes
+   * before the request completes.
+   */
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
@@ -25,6 +54,7 @@ export function ModelSelectionModal({ isOpen, onClose, onCreateNew, onLoadExisti
         const res = await fetch(`${API_BASE}/models/all`, {
           headers: { 'Accept': 'application/json', ...getAuthHeader() },
         });
+        // 401/403 means the user lacks Admin privileges to list models
         if (res.status === 401 || res.status === 403) {
           setListError('Requires Admin privileges to list models.');
           setModels([]);
@@ -34,6 +64,7 @@ export function ModelSelectionModal({ isOpen, onClose, onCreateNew, onLoadExisti
           const txt = await res.text();
           throw new Error(txt || `Failed to fetch models (${res.status})`);
         }
+        // API returns string[] — filter to be safe
         const data = (await res.json()) as unknown;
         const arr = Array.isArray(data) ? data.filter((x) => typeof x === 'string') as string[] : [];
         if (!cancelled) setModels(arr);
@@ -47,6 +78,7 @@ export function ModelSelectionModal({ isOpen, onClose, onCreateNew, onLoadExisti
     return () => { cancelled = true; };
   }, [isOpen]);
 
+  // Allow dismissing the modal with the Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -61,6 +93,7 @@ export function ModelSelectionModal({ isOpen, onClose, onCreateNew, onLoadExisti
     };
   }, [isOpen]);
 
+  /** Validate the input and trigger model creation */
   const handleCreateNew = () => {
     if (!modelName.trim()) {
       setError('Please enter a model name');
@@ -71,6 +104,7 @@ export function ModelSelectionModal({ isOpen, onClose, onCreateNew, onLoadExisti
     setError(null);
   };
 
+  /** Reset local state and notify parent to close the modal */
   const handleClose = () => {
     setModelName('');
     setError(null);
@@ -80,15 +114,21 @@ export function ModelSelectionModal({ isOpen, onClose, onCreateNew, onLoadExisti
   if (!isOpen) return null;
 
   return (
+    /* Overlay — clicking the backdrop closes the modal */
     <div style={overlay} onClick={handleClose}>
+      {/* Modal card — stopPropagation prevents backdrop-click from closing */}
       <div style={modal} onClick={(e) => e.stopPropagation()} aria-labelledby="model-selection-title">
-        {/* Header */}
+
+        {/* ── Section 1: Header ── */}
         <div style={header}>
           <h2 id="model-selection-title" style={titleStyle}>Select Model</h2>
           <button onClick={handleClose} style={closeBtn} aria-label="Close">✖</button>
         </div>
 
-        {/* Existing Models List */}
+        {/* ── Section 2: Existing Models List ──
+            Fetched from GET /models/all on mount.
+            Clicking a model item calls onLoadExisting(name), which navigates
+            to /editor?model={name} — same behaviour as the toolbar "Open Model". */}
         <div style={sectionBox}>
           <h3 style={sectionTitle}>Existing Models</h3>
           {listLoading ? (
@@ -126,14 +166,17 @@ export function ModelSelectionModal({ isOpen, onClose, onCreateNew, onLoadExisti
           )}
         </div>
 
-        {/* Divider */}
+        {/* ── Visual divider between the two sections ── */}
         <div style={divider}>
           <span style={dividerLine} />
           <span style={dividerText}>OR CREATE NEW</span>
           <span style={dividerLine} />
         </div>
 
-        {/* Create New Model */}
+        {/* ── Section 3: Create New Model ──
+            User types a model name and clicks "Create" (or presses Enter).
+            Calls onCreateNew(name), which navigates to /editor?model={name}.
+            The backend auto-creates an empty model when the name doesn't exist. */}
         <div style={createSection}>
           <div style={createRow}>
             <input
@@ -155,8 +198,11 @@ export function ModelSelectionModal({ isOpen, onClose, onCreateNew, onLoadExisti
   );
 }
 
-/* ── Styles ── */
+/* ── Inline Styles ──
+   All styles use React.CSSProperties objects to keep the component self-contained.
+   The colour palette matches the project's green/gold theme used in AuthPage. */
 
+/** Full-screen semi-transparent backdrop */
 const overlay: React.CSSProperties = {
   position: 'fixed',
   top: 0, left: 0, right: 0, bottom: 0,
@@ -167,6 +213,7 @@ const overlay: React.CSSProperties = {
   zIndex: 1200,
 };
 
+/** Centred modal card with vertical flex layout */
 const modal: React.CSSProperties = {
   backgroundColor: '#fff',
   borderRadius: 16,
@@ -202,6 +249,7 @@ const closeBtn: React.CSSProperties = {
   padding: 4,
 };
 
+/** Scrollable container for the existing models list */
 const sectionBox: React.CSSProperties = {
   flex: 1,
   minHeight: 0,
@@ -232,6 +280,7 @@ const errorBoxStyle: React.CSSProperties = {
   border: '1px solid #fca5a5',
 };
 
+/** Grid layout for model items; max-height with scroll for long lists */
 const listContainer: React.CSSProperties = {
   listStyle: 'none',
   padding: 0,
@@ -242,6 +291,7 @@ const listContainer: React.CSSProperties = {
   overflowY: 'auto',
 };
 
+/** Individual model row button — hover colours are set via JS events */
 const modelItemBtn: React.CSSProperties = {
   width: '100%',
   textAlign: 'left',
@@ -263,6 +313,7 @@ const modelIcon: React.CSSProperties = {
   flexShrink: 0,
 };
 
+/** Horizontal rule with centred "OR CREATE NEW" label */
 const divider: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -283,6 +334,7 @@ const dividerText: React.CSSProperties = {
   letterSpacing: '1px',
 };
 
+/** Wrapper for the create-new-model input row */
 const createSection: React.CSSProperties = {};
 
 const createRow: React.CSSProperties = {
