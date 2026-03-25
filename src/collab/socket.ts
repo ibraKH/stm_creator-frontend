@@ -187,6 +187,26 @@ export function subscribePresenceEvents(handlers: {
   };
 }
 
+export function emitCursorMove(modelName: string, x: number, y: number): void {
+  socket?.emit('cursor:move', { modelName, x, y });
+}
+
+export function subscribeCursorEvents(handlers: {
+  onMove?: (payload: CursorMovePayload) => void;
+}): () => void {
+  const activeSocket = socket;
+  if (!activeSocket) {
+    return () => undefined;
+  }
+
+  const handleMove = (payload: CursorMovePayload) => handlers.onMove?.(payload);
+  activeSocket.on('cursor:move', handleMove);
+
+  return () => {
+    activeSocket.off('cursor:move', handleMove);
+  };
+}
+
 export function emitNodeLockAcquire(modelName: string, entityId: number): void {
   socket?.emit('lock:acquire', { entityType: 'node', entityId, modelName });
 }

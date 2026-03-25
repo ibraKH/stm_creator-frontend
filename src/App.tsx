@@ -35,8 +35,10 @@ import { parseStateId } from './app/hooks/graph-utils';
 import {
   connectCollabSocket,
   disconnectCollabSocket,
+  emitCursorMove,
   emitNodeLockAcquire,
   emitNodeLockRelease,
+  subscribeCursorEvents,
   subscribePresenceEvents,
   subscribeNodeLockEvents,
   type OnlineUser,
@@ -58,6 +60,16 @@ type NodeLockState = Record<
   }
 >;
 
+type RemoteCursorState = Record<
+  number,
+  {
+    userId: number;
+    x: number;
+    y: number;
+    color: string;
+  }
+>;
+
 function GraphEditor() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isModelListOpen, setIsModelListOpen] = useState(false);
@@ -72,10 +84,14 @@ function GraphEditor() {
   const [isGuest, setIsGuest] = useState(false);
   const [nodeLocks, setNodeLocks] = useState<NodeLockState>({});
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [remoteCursors, setRemoteCursors] = useState<RemoteCursorState>({});
   const activeNodeLockRef = useRef<{ nodeId: string | null; entityId: number | null }>({
     nodeId: null,
     entityId: null,
   });
+  const canvasAreaRef = useRef<HTMLDivElement | null>(null);
+  const cursorEmitFrameRef = useRef<number | null>(null);
+  const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
 
   const onboarding = useOnboarding();
 
@@ -263,6 +279,7 @@ function GraphEditor() {
       disconnectCollabSocket();
       setNodeLocks({});
       setOnlineUsers([]);
+      setRemoteCursors({});
       activeNodeLockRef.current = { nodeId: null, entityId: null };
       return;
     }
@@ -285,6 +302,28 @@ function GraphEditor() {
       },
       onLeave: (payload) => {
         setOnlineUsers((prev) => prev.filter((user) => user.userId !== payload.userId));
+        setRemoteCursors((prev) => {
+          const next = { ...prev };
+          delete next[payload.userId];
+          return next;
+        });
+      },
+    });
+
+    const unsubscribeCursor = subscribeCursorEvents({
+      onMove: (payload) => {
+        if (payload.userId === Number(auth.user.id)) {
+          return;
+        }
+        setRemoteCursors((prev) => ({
+          ...prev,
+          [payload.userId]: {
+            userId: payload.userId,
+            x: payload.x,
+            y: payload.y,
+            color: payload.color || '#3b82f6',
+          },
+        }));
       },
     });
 
@@ -322,11 +361,13 @@ function GraphEditor() {
 
     return () => {
       unsubscribePresence();
+      unsubscribeCursor();
       unsubscribe();
       releaseActiveNodeLock(modelName);
       disconnectCollabSocket();
       setNodeLocks({});
       setOnlineUsers([]);
+      setRemoteCursors({});
     };
   }, [auth?.token, auth?.user.id, modelName]);
 
@@ -390,6 +431,38 @@ function GraphEditor() {
     { cls: 'Class V', label: 'Class V', bg: '#ffedd5', border: '#fdba74' },
     { cls: 'Class VI', label: 'Class VI', bg: '#fee2e2', border: '#fca5a5' },
   ];
+
+  const handleCanvasMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!auth?.token || !modelName || !canvasAreaRef.current) {
+      return;
+    }
+
+    const rect = canvasAreaRef.current.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    pendingCursorRef.current = { x, y };
+
+    if (cursorEmitFrameRef.current !== null) {
+      return;
+    }
+
+    cursorEmitFrameRef.current = globalThis.requestAnimationFrame(() => {
+      cursorEmitFrameRef.current = null;
+      const next = pendingCursorRef.current;
+      if (!next || !modelName) {
+        return;
+      }
+      emitCursorMove(modelName, next.x, next.y);
+    });
+  };
+
+  const handleCanvasMouseLeave = () => {
+    pendingCursorRef.current = null;
+    if (cursorEmitFrameRef.current !== null) {
+      globalThis.cancelAnimationFrame(cursorEmitFrameRef.current);
+      cursorEmitFrameRef.current = null;
+    }
+  };
 
   return (
     <div className="app-container">
@@ -531,7 +604,12 @@ function GraphEditor() {
         </div>
 
         {/* CANVAS */}
-        <div className="canvas-area">
+        <div
+          ref={canvasAreaRef}
+          className="canvas-area"
+          onMouseMoveCapture={handleCanvasMouseMove}
+          onMouseLeave={handleCanvasMouseLeave}
+        >
           <ReactFlow
             nodes={nodesWithCallbacks}
             edges={edges}
@@ -564,6 +642,27 @@ function GraphEditor() {
             <MiniMap />
             <Controls />
           </ReactFlow>
+
+          <div className="cursor-layer" aria-hidden="true">
+            {Object.values(remoteCursors).map((cursor) => {
+              const user = onlineUsers.find((item) => item.userId === cursor.userId);
+              const label = user?.email?.trim() || `User ${cursor.userId}`;
+              return (
+                <div
+                  key={cursor.userId}
+                  className="remote-cursor"
+                  style={{
+                    left: cursor.x,
+                    top: cursor.y,
+                    '--cursor-color': cursor.color,
+                  } as React.CSSProperties}
+                >
+                  <div className="remote-cursor-pointer" />
+                  <div className="remote-cursor-label">{label}</div>
+                </div>
+              );
+            })}
+          </div>
 
           {/* Status bar */}
           {bmrgData && (
