@@ -1,0 +1,419 @@
+import { useState, useRef, useEffect } from 'react';
+
+/** A single comment entry */
+export interface CommentEntry {
+    id: string;
+    text: string;
+    author: string;
+    createdAt: string;
+}
+
+/** An @-mentionable item (node or edge) */
+interface MentionItem {
+    type: 'node' | 'edge';
+    id: string;
+    label: string;
+}
+
+interface CommentPanelProps {
+    onClose: () => void;
+    /** Available nodes: { id, label } */
+    nodes: { id: string; label: string }[];
+    /** Available edges: { id, sourceLabel, targetLabel } */
+    edges: { id: string; sourceLabel: string; targetLabel: string }[];
+    /** Current user email for authorship */
+    userEmail: string;
+    /** Model name used as localStorage key */
+    modelName: string;
+}
+
+// localStorage helpers
+function loadComments(modelName: string): CommentEntry[] {
+    try {
+        const raw = localStorage.getItem(`stmCreator.comments.${modelName}`);
+        return raw ? (JSON.parse(raw) as CommentEntry[]) : [];
+    } catch { return []; }
+}
+
+function saveComments(modelName: string, comments: CommentEntry[]) {
+    localStorage.setItem(`stmCreator.comments.${modelName}`, JSON.stringify(comments));
+}
+
+export function CommentPanel({ onClose, nodes, edges, userEmail, modelName }: CommentPanelProps) {
+    const [comments, setComments] = useState<CommentEntry[]>(() => loadComments(modelName));
+    const [text, setText] = useState('');
+    const [showMentions, setShowMentions] = useState(false);
+    const [mentionFilter, setMentionFilter] = useState('');
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    // Reload comments when model changes
+    useEffect(() => {
+        setComments(loadComments(modelName));
+    }, [modelName]);
+
+    // Build the mention list from nodes and edges
+    const mentionItems: MentionItem[] = [
+        ...nodes.map(n => ({ type: 'node' as const, id: n.id, label: n.label })),
+        ...edges.map(e => ({ type: 'edge' as const, id: e.id, label: `${e.sourceLabel} → ${e.targetLabel}` })),
+    ];
+
+    const filteredMentions = mentionItems.filter(m =>
+        m.label.toLowerCase().includes(mentionFilter.toLowerCase())
+    );
+
+    const handleTextChange = (value: string) => {
+        setText(value);
+        // Detect @ trigger: find the last @ that isn't part of a completed @[...] mention
+        const lastAt = value.lastIndexOf('@');
+        if (lastAt >= 0) {
+            const afterAt = value.slice(lastAt + 1);
+            // If it starts with '[' and has a closing ']', the mention is complete
+            if (afterAt.startsWith('[') && afterAt.includes(']')) {
+                setShowMentions(false);
+                setMentionFilter('');
+                return;
+            }
+            // Show dropdown; strip leading '[' if user hasn't closed bracket yet
+            const filter = afterAt.startsWith('[') ? afterAt.slice(1) : afterAt;
+            // Hide if there's a newline in the filter
+            if (!filter.includes('\n')) {
+                setShowMentions(true);
+                setMentionFilter(filter);
+                return;
+            }
+        }
+        setShowMentions(false);
+        setMentionFilter('');
+    };
+
+    const insertMention = (item: MentionItem) => {
+        const lastAt = text.lastIndexOf('@');
+        const before = text.slice(0, lastAt);
+        const newText = `${before}@[${item.label}] `;
+        setText(newText);
+        setShowMentions(false);
+        setMentionFilter('');
+        textareaRef.current?.focus();
+    };
+
+    const handleSubmit = () => {
+        if (!text.trim()) return;
+        const entry: CommentEntry = {
+            id: `comment-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+            text: text.trim(),
+            author: userEmail || 'Guest',
+            createdAt: new Date().toISOString(),
+        };
+        const next = [entry, ...comments];
+        setComments(next);
+        saveComments(modelName, next);
+        setText('');
+    };
+
+    const confirmDelete = () => {
+        if (!pendingDeleteId) return;
+        const next = comments.filter(c => c.id !== pendingDeleteId);
+        setComments(next);
+        saveComments(modelName, next);
+        setPendingDeleteId(null);
+    };
+
+    /** Render comment text with @[...] mentions highlighted */
+    const renderText = (raw: string) => {
+        // Match @[mention name] format
+        const parts = raw.split(/(@\[[^\]]+\])/g);
+        return parts.map((part, i) =>
+            part.startsWith('@[')
+                ? <span key={i} style={mentionHighlight}>{part}</span>
+                : <span key={i}>{part}</span>
+        );
+    };
+
+    return (
+        <>
+            <div className="rp-header">
+                <span className="rp-title">Comments</span>
+                <button className="rp-close" onClick={onClose}>×</button>
+            </div>
+
+            {/* New comment input */}
+            <div style={inputSection}>
+                <div style={{ position: 'relative' }}>
+                    <textarea
+                        ref={textareaRef}
+                        value={text}
+                        onChange={(e) => handleTextChange(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey && !showMentions) {
+                                e.preventDefault();
+                                handleSubmit();
+                            }
+                        }}
+                        placeholder="Write a comment… Use @ to mention nodes/edges"
+                        style={textareaStyle}
+                        rows={3}
+                    />
+                    {/* @mention dropdown — positioned below textarea using its bounding rect */}
+                    {showMentions && filteredMentions.length > 0 && textareaRef.current && (() => {
+                        const rect = textareaRef.current!.getBoundingClientRect();
+                        return (
+                            <div style={{ ...mentionDropdown, top: rect.bottom + 4, left: rect.left }}>
+                                {filteredMentions.slice(0, 8).map(item => (
+                                    <button
+                                        key={`${item.type}-${item.id}`}
+                                        onClick={() => insertMention(item)}
+                                        style={mentionItem}
+                                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface2, #f0fdf4)'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+                                    >
+                                        <span style={mentionBadge(item.type)}>
+                                            {item.type === 'node' ? 'N' : 'E'}
+                                        </span>
+                                        <span style={{ fontSize: 12 }}>{item.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        );
+                    })()}
+                </div>
+                <button onClick={handleSubmit} style={submitBtn} disabled={!text.trim()}>
+                    Submit
+                </button>
+            </div>
+
+            <div style={dividerStyle} />
+
+            {/* Comment history */}
+            <div style={historySection}>
+                {comments.length === 0 ? (
+                    <p style={emptyText}>No comments yet.</p>
+                ) : (
+                    comments.map(c => (
+                        <div key={c.id} style={commentCard}>
+                            <div style={commentHeader}>
+                                <span style={authorStyle}>{c.author}</span>
+                                <span style={dateStyle}>{new Date(c.createdAt).toLocaleString()}</span>
+                            </div>
+                            <div style={commentText}>{renderText(c.text)}</div>
+                            <button
+                                onClick={() => setPendingDeleteId(c.id)}
+                                style={deleteBtnStyle}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {/* Delete confirmation overlay */}
+            {pendingDeleteId && (
+                <div style={confirmOverlay}>
+                    <div style={confirmBox}>
+                        <p style={confirmText}>Delete this comment?</p>
+                        <div style={confirmActions}>
+                            <button onClick={() => setPendingDeleteId(null)} style={confirmCancelBtn}>Cancel</button>
+                            <button onClick={confirmDelete} style={confirmDeleteBtn}>Delete</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+/* ── Styles ── */
+
+const inputSection: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    marginBottom: 12,
+};
+
+const textareaStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 10px',
+    borderRadius: 6,
+    border: '1px solid var(--border, #e5e7eb)',
+    background: 'var(--surface2, #fff)',
+    color: 'var(--text, #064e3b)',
+    fontSize: 12,
+    resize: 'vertical',
+    outline: 'none',
+    fontFamily: 'inherit',
+};
+
+const mentionDropdown: React.CSSProperties = {
+    position: 'fixed',
+    width: 228,
+    maxHeight: 220,
+    overflowY: 'auto',
+    background: '#fff',
+    border: '1px solid var(--border, #e5e7eb)',
+    borderRadius: 6,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+    zIndex: 1300,
+};
+
+const mentionItem: React.CSSProperties = {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 10px',
+    border: 'none',
+    background: '#fff',
+    cursor: 'pointer',
+    textAlign: 'left',
+    fontSize: 12,
+};
+
+const mentionBadge = (type: 'node' | 'edge'): React.CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#fff',
+    background: type === 'node' ? '#10b981' : '#6366f1',
+    flexShrink: 0,
+});
+
+const submitBtn: React.CSSProperties = {
+    padding: '6px 14px',
+    background: 'linear-gradient(135deg, #10b981, #059669)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 600,
+    alignSelf: 'flex-end',
+};
+
+const dividerStyle: React.CSSProperties = {
+    height: 1,
+    background: 'var(--border, #e5e7eb)',
+    marginBottom: 12,
+};
+
+const historySection: React.CSSProperties = {
+    flex: 1,
+    overflowY: 'auto',
+};
+
+const emptyText: React.CSSProperties = {
+    color: 'var(--text-muted, #6b7280)',
+    fontSize: 12,
+    margin: '8px 0',
+};
+
+const commentCard: React.CSSProperties = {
+    background: 'var(--surface2, #f9fafb)',
+    border: '1px solid var(--border, #e5e7eb)',
+    borderRadius: 8,
+    padding: '10px 12px',
+    marginBottom: 8,
+};
+
+const commentHeader: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+};
+
+const authorStyle: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'var(--text, #064e3b)',
+};
+
+const dateStyle: React.CSSProperties = {
+    fontSize: 10,
+    color: 'var(--text-muted, #6b7280)',
+};
+
+const commentText: React.CSSProperties = {
+    fontSize: 12,
+    color: 'var(--text, #064e3b)',
+    lineHeight: 1.5,
+    wordBreak: 'break-word',
+    marginBottom: 6,
+};
+
+const mentionHighlight: React.CSSProperties = {
+    color: '#059669',
+    fontWeight: 600,
+    background: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 3,
+    padding: '0 2px',
+};
+
+const deleteBtnStyle: React.CSSProperties = {
+    background: 'none',
+    border: 'none',
+    color: '#ef4444',
+    fontSize: 11,
+    cursor: 'pointer',
+    padding: 0,
+    fontWeight: 500,
+};
+
+const confirmOverlay: React.CSSProperties = {
+    position: 'fixed',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1200,
+};
+
+const confirmBox: React.CSSProperties = {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    width: 300,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+    textAlign: 'center',
+};
+
+const confirmText: React.CSSProperties = {
+    margin: '0 0 16px',
+    fontSize: 14,
+    color: '#064e3b',
+    fontWeight: 500,
+};
+
+const confirmActions: React.CSSProperties = {
+    display: 'flex',
+    gap: 10,
+    justifyContent: 'center',
+};
+
+const confirmCancelBtn: React.CSSProperties = {
+    padding: '8px 20px',
+    background: '#fff',
+    color: '#065f46',
+    border: '1px solid #F0D9A6',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontSize: 14,
+};
+
+const confirmDeleteBtn: React.CSSProperties = {
+    padding: '8px 20px',
+    background: '#ef4444',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
+};

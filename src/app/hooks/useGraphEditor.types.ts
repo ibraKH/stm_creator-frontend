@@ -58,7 +58,7 @@ export interface UseGraphEditorResult {
     openAddNodeModal: () => void;
     closeNodeModal: () => void;
     closeTransitionModal: () => void;
-    saveCurrentVersion: () => void;
+    saveCurrentVersion: (customName?: string) => void;
     openVersionManager: () => void;
     closeVersionManager: () => void;
     restoreVersion: (id: string) => void;
