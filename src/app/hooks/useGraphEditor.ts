@@ -6,7 +6,7 @@ import { DEFAULT_EDGE_OPTIONS, EXTENDED_EDGE_TYPES, EXTENDED_NODE_TYPES } from '
 import { UseGraphEditorResult } from './useGraphEditor.types';
 import { TransitionData, statesToNodes } from '../../utils/stateTransition';
 import { useGraphBaseState } from './useGraphBaseState';
-import { buildStateNameMap, updateNodeLabel } from './graphMutations';
+import { applyBmrgNodePatch, applyNodePatch, buildStateNameMap, updateNodeLabel } from './graphMutations';
 import { createRebuildEdges } from './graphRebuilder';
 import { createTransitionCreator, createEdgeHandlers } from './graphTransitions';
 import { createNodeHandlers } from './graphNodes';
@@ -199,6 +199,16 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
         closeTransitionModal();
     };
 
+    const applyRemoteNodePatch = (nodeId: string, graphStateId: number, field: string, value: unknown) => {
+        state.setNodes((prev) => applyNodePatch(prev, nodeId, field, value));
+        state.setBmrgData((prev) => {
+            if (!prev) {
+                return prev;
+            }
+            return applyBmrgNodePatch(prev, graphStateId, field, value);
+        });
+    };
+
     return {
         nodesWithCallbacks,
         edges: state.edges,
@@ -232,6 +242,7 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
             }
             nodeHandlers.handleSaveNode(attributes);
         },
+        applyRemoteNodePatch,
         handleSaveTransition,
         handleDeleteTransition: (transition) => {
             if (blockIfReadOnly()) {

@@ -51,6 +51,15 @@ export type LockDeniedPayload = {
   lockedBy?: string;
 };
 
+export type EntityPatchPayload = {
+  entityType: 'node' | string;
+  entityId: number;
+  field: string;
+  value: unknown;
+  userId?: number;
+  modelName?: string;
+};
+
 type ServerToClientEvents = {
   'presence:sync': (payload: PresenceSyncPayload) => void;
   'presence:join': (payload: PresenceJoinPayload) => void;
@@ -60,6 +69,7 @@ type ServerToClientEvents = {
   'lock:acquired': (payload: LockEventPayload) => void;
   'lock:released': (payload: LockEventPayload) => void;
   'lock:denied': (payload: LockDeniedPayload) => void;
+  'entity:patch': (payload: EntityPatchPayload) => void;
   'error:validation': (payload: { message?: string }) => void;
 };
 
@@ -69,6 +79,7 @@ type ClientToServerEvents = {
   'viewport:update': (payload: { modelName: string; x: number; y: number; zoom: number }) => void;
   'lock:acquire': (payload: { entityType: 'node'; entityId: number; modelName: string }) => void;
   'lock:release': (payload: { entityType: 'node'; entityId: number; modelName: string }) => void;
+  'entity:patch': (payload: { entityType: 'node'; entityId: number; modelName: string; field: string; value: unknown }) => void;
 };
 
 type CollabSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -191,6 +202,10 @@ export function emitCursorMove(modelName: string, x: number, y: number): void {
   socket?.emit('cursor:move', { modelName, x, y });
 }
 
+export function emitEntityPatch(modelName: string, entityId: number, field: string, value: unknown): void {
+  socket?.emit('entity:patch', { entityType: 'node', entityId, modelName, field, value });
+}
+
 export function subscribeCursorEvents(handlers: {
   onMove?: (payload: CursorMovePayload) => void;
 }): () => void {
@@ -204,6 +219,22 @@ export function subscribeCursorEvents(handlers: {
 
   return () => {
     activeSocket.off('cursor:move', handleMove);
+  };
+}
+
+export function subscribeEntityPatchEvents(handlers: {
+  onPatch?: (payload: EntityPatchPayload) => void;
+}): () => void {
+  const activeSocket = socket;
+  if (!activeSocket) {
+    return () => undefined;
+  }
+
+  const handlePatch = (payload: EntityPatchPayload) => handlers.onPatch?.(payload);
+  activeSocket.on('entity:patch', handlePatch);
+
+  return () => {
+    activeSocket.off('entity:patch', handlePatch);
   };
 }
 
