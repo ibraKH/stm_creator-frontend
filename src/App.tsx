@@ -270,6 +270,18 @@ function GraphEditor() {
     applyRemoteNodePatch(nodeId, graphStateId, field, value);
   };
 
+  const handleNodeDragStop = (_event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
+    const graphStateId = parseStateId(node.id);
+    if (!auth?.token || !modelName || graphStateId === null) {
+      return;
+    }
+
+    emitEntityPatch(modelName, graphStateId, 'position', {
+      x: node.position.x,
+      y: node.position.y,
+    });
+  };
+
   // Onboarding tour auto-start disabled — keep code for manual replay via Help
   // useEffect(() => {
   //   if (!(auth || isGuest)) return;
@@ -645,6 +657,7 @@ function GraphEditor() {
             onConnect={onConnect}
             onEdgeClick={onEdgeClick}
             onEdgeDoubleClick={onEdgeDoubleClick}
+            onNodeDragStop={handleNodeDragStop}
             edgesFocusable
             elementsSelectable
             edgesReconnectable={baseCanEdit}

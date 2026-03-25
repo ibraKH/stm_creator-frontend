@@ -92,6 +92,16 @@ function formatConditionRange(lowerRaw: string, upperRaw: string, fallback: stri
     return `Condition range: ${lower.toFixed(2)} - ${upper.toFixed(2)}`;
 }
 
+function isPositionValue(value: unknown): value is { x: number; y: number } {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    const maybePosition = value as { x?: unknown; y?: unknown };
+    return typeof maybePosition.x === 'number' && Number.isFinite(maybePosition.x)
+        && typeof maybePosition.y === 'number' && Number.isFinite(maybePosition.y);
+}
+
 export function applyNodePatch(nodes: AppNode[], nodeId: string, field: string, value: unknown): AppNode[] {
     return nodes.map((node) => {
         if (node.id !== nodeId) {
@@ -126,6 +136,19 @@ export function applyNodePatch(nodes: AppNode[], nodeId: string, field: string, 
             const lower = field === 'conditionLower' ? String(value ?? '') : current.lower;
             const upper = field === 'conditionUpper' ? String(value ?? '') : current.upper;
             nextAttributes.condition = formatConditionRange(lower, upper, currentAttributes.condition ?? '');
+        } else if (field === 'position' && isPositionValue(value)) {
+            return {
+                ...node,
+                position: {
+                    x: value.x,
+                    y: value.y,
+                },
+                data: {
+                    ...node.data,
+                    label: nextLabel,
+                    attributes: nextAttributes,
+                },
+            } as AppNode;
         }
 
         return {
@@ -239,6 +262,19 @@ export function applyBmrgNodePatch(
                 attributes: {
                     ...(state.attributes ?? {}),
                     [field]: value,
+                },
+            };
+        }
+
+        if (field === 'position' && isPositionValue(value)) {
+            return {
+                ...state,
+                attributes: {
+                    ...(state.attributes ?? {}),
+                    position: {
+                        x: value.x,
+                        y: value.y,
+                    },
                 },
             };
         }
