@@ -18,7 +18,7 @@ import { EdgeCreationHint } from './app/components/EdgeCreationHint';
 import { ErrorState } from './app/components/ErrorState';
 import { LoadingState } from './app/components/LoadingState';
 import { TipsPanel } from './app/components/TipsPanel';
-import { VersionManagerModal } from './app/components/VersionManagerModal';
+import { MilestoneModal } from './app/components/MilestoneModal';
 import { ModelListModal } from './app/components/ModelListModal';
 import { HelpModal } from './app/components/HelpModal';
 import { useGraphEditor } from './app/hooks/useGraphEditor';
@@ -380,8 +380,7 @@ function GraphEditor() {
           onCreateNewModel={handleCreateNewModel}
           onDeleteModel={handleDeleteModel}
           onApplyLayout={applyLayout}
-          onSaveVersion={saveCurrentVersion}
-          onOpenVersionManager={openVersionManager}
+          onOpenMilestone={openVersionManager}
           onImportEKS={importFromEKS}
           onExportEKS={exportToEKS}
           onRelayout={handleReLayout}
@@ -561,12 +560,14 @@ function GraphEditor() {
         stateNames={stateNameMap}
       />
 
-      <VersionManagerModal
+      <MilestoneModal
         isOpen={isVersionModalOpen}
         versions={versions}
         onClose={closeVersionManager}
+        onSave={saveCurrentVersion}
         onRestore={restoreVersion}
         onDelete={deleteVersion}
+        canEdit={baseCanEdit}
       />
 
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />

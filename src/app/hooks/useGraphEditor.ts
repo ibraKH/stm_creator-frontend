@@ -280,11 +280,11 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
         },
         closeNodeModal: nodeHandlers.closeNodeModal,
         closeTransitionModal,
-        saveCurrentVersion: () => {
+        saveCurrentVersion: (customName?: string) => {
             if (blockIfReadOnly()) {
                 return;
             }
-            versionActions.saveCurrentVersion();
+            versionActions.saveCurrentVersion(customName);
         },
         openVersionManager: versionActions.openVersionManager,
         closeVersionManager: versionActions.closeVersionManager,

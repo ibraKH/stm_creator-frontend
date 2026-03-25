@@ -13,8 +13,8 @@ interface GraphToolbarProps {
   /** Callback to create a new model; receives the model name from the modal input */
   readonly onCreateNewModel?: (modelName: string) => void;
   readonly onDeleteModel?: () => void;
-  readonly onSaveVersion: () => void;
-  readonly onOpenVersionManager: () => void;
+  /** Opens the unified Milestone modal (save + history) */
+  readonly onOpenMilestone: () => void;
   readonly onImportEKS: (file: File) => void | Promise<void>;
   readonly onExportEKS: () => void;
   readonly onRelayout: () => void;
@@ -47,8 +47,7 @@ export function GraphToolbar({
   onDeleteModel,
   onRelayout,
   onApplyLayout,
-  onSaveVersion,
-  onOpenVersionManager,
+  onOpenMilestone,
   onImportEKS,
   onExportEKS,
   onToggleSelfTransitions,
@@ -134,17 +133,8 @@ export function GraphToolbar({
         {isSaving ? 'Saving...' : 'Save Model'}
       </button>
 
-      <button
-        data-tour="save-version"
-        onClick={onSaveVersion}
-        className="tb-btn"
-        disabled={editDisabled}
-      >
-        Save Version
-      </button>
-
-      <button data-tour="versions" onClick={onOpenVersionManager} className="tb-btn">
-        Versions
+      <button data-tour="milestone" onClick={onOpenMilestone} className="tb-btn">
+        Milestone
       </button>
 
       <div className="tb-sep" />

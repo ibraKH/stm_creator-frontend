@@ -57,7 +57,7 @@ export function createVersionActions({
     const openVersionManager = () => setIsVersionModalOpen(true);
     const closeVersionManager = () => setIsVersionModalOpen(false);
 
-    const saveCurrentVersion = () => {
+    const saveCurrentVersion = (customName?: string) => {
         const data = getData();
         if (!data) {
             return;
@@ -65,9 +65,10 @@ export function createVersionActions({
 
         const timestamp = new Date();
         const existing = getVersions();
+        const autoName = createVersionName(timestamp, existing);
         const version: GraphModelVersion = {
             id: createId(),
-            name: createVersionName(timestamp, existing),
+            name: customName?.trim() || autoName,
             savedAt: timestamp.toISOString(),
             data: cloneData(data),
         };
