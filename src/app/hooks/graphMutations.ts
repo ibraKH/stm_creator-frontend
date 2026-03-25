@@ -74,6 +74,71 @@ export function applyNodeAttributes(nodes: AppNode[], nodeId: string, attributes
     });
 }
 
+function parseConditionBounds(condition: string | undefined): { lower: string; upper: string } {
+    const regex = /Condition\s*range:\s*([\d.+-]+)\s*-\s*([\d.+-]+)/i;
+    const match = regex.exec(condition ?? '');
+    return {
+        lower: match?.[1] ?? '',
+        upper: match?.[2] ?? '',
+    };
+}
+
+function formatConditionRange(lowerRaw: string, upperRaw: string, fallback: string): string {
+    const lower = parseFloat(lowerRaw);
+    const upper = parseFloat(upperRaw);
+    if (Number.isNaN(lower) || Number.isNaN(upper)) {
+        return fallback;
+    }
+    return `Condition range: ${lower.toFixed(2)} - ${upper.toFixed(2)}`;
+}
+
+export function applyNodePatch(nodes: AppNode[], nodeId: string, field: string, value: unknown): AppNode[] {
+    return nodes.map((node) => {
+        if (node.id !== nodeId) {
+            return node;
+        }
+
+        const currentAttributes = node.data.attributes ?? {
+            stateName: node.data.label,
+            stateNumber: '',
+            vastClass: '',
+            condition: '',
+            imageUrl: '',
+            note: '',
+        };
+
+        const nextAttributes = { ...currentAttributes };
+        let nextLabel = node.data.label;
+
+        if (field === 'stateName' && typeof value === 'string') {
+            nextLabel = value;
+            nextAttributes.stateName = value;
+        } else if (field === 'stateNumber' && typeof value === 'string') {
+            nextAttributes.stateNumber = value;
+        } else if (field === 'vastClass' && typeof value === 'string') {
+            nextAttributes.vastClass = value;
+        } else if (field === 'note' && typeof value === 'string') {
+            nextAttributes.note = value;
+        } else if (field === 'imageUrl' && typeof value === 'string') {
+            nextAttributes.imageUrl = value;
+        } else if (field === 'conditionLower' || field === 'conditionUpper') {
+            const current = parseConditionBounds(currentAttributes.condition);
+            const lower = field === 'conditionLower' ? String(value ?? '') : current.lower;
+            const upper = field === 'conditionUpper' ? String(value ?? '') : current.upper;
+            nextAttributes.condition = formatConditionRange(lower, upper, currentAttributes.condition ?? '');
+        }
+
+        return {
+            ...node,
+            data: {
+                ...node.data,
+                label: nextLabel,
+                attributes: nextAttributes,
+            },
+        } as AppNode;
+    });
+}
+
 export function createCustomNode(
     attributes: NodeAttributes,
     onLabelChange: (id: string, label: string) => void,
@@ -125,6 +190,60 @@ export function updateBmrgStateName(
             state_name: attributes.stateName,
             attributes: nextAttributes,
         };
+    });
+
+    return {
+        ...data,
+        states,
+    };
+}
+
+export function applyBmrgNodePatch(
+    data: BMRGData,
+    stateId: number,
+    field: string,
+    value: unknown,
+): BMRGData {
+    const states = data.states.map((state) => {
+        if (getGraphStateId(state) !== stateId) {
+            return state;
+        }
+
+        if (field === 'stateName' && typeof value === 'string') {
+            return { ...state, state_name: value };
+        }
+
+        if (field === 'vastClass' && typeof value === 'string') {
+            return {
+                ...state,
+                vast_state: {
+                    ...state.vast_state,
+                    vast_class: value,
+                },
+            };
+        }
+
+        if (field === 'conditionLower') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? { ...state, condition_lower: parsed } : state;
+        }
+
+        if (field === 'conditionUpper') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? { ...state, condition_upper: parsed } : state;
+        }
+
+        if (field === 'note' || field === 'imageUrl') {
+            return {
+                ...state,
+                attributes: {
+                    ...(state.attributes ?? {}),
+                    [field]: value,
+                },
+            };
+        }
+
+        return state;
     });
 
     return {

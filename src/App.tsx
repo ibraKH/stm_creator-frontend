@@ -31,6 +31,7 @@ import './extensions/extensions.css';
 
 import AuthPage from './app/auth/AuthPage';
 import { authStorage, type AuthUser } from './app/auth/api';
+import { emitEntityPatch, subscribeEntityPatchEvents } from './collab/socket';
 import { parseStateId } from './app/hooks/graph-utils';
 import {
   connectCollabSocket,
@@ -225,6 +226,7 @@ function GraphEditor() {
     onEdgeDoubleClick,
     handleEdgesChange,
     handleSaveNode,
+    applyRemoteNodePatch,
     handleSaveTransition,
     handleDeleteTransition,
     handleSaveModel,
@@ -256,6 +258,17 @@ function GraphEditor() {
   });
 
   const modelName = bmrgData?.stm_name?.trim() || null;
+
+  const handleNodePatch = (field: string, value: unknown) => {
+    const nodeId = initialNodeValues?.id;
+    const graphStateId = nodeId ? parseStateId(nodeId) : null;
+    if (!auth?.token || !modelName || !nodeId || graphStateId === null) {
+      return;
+    }
+
+    emitEntityPatch(modelName, graphStateId, field, value);
+    applyRemoteNodePatch(nodeId, graphStateId, field, value);
+  };
 
   // Onboarding tour auto-start disabled — keep code for manual replay via Help
   // useEffect(() => {
@@ -327,6 +340,16 @@ function GraphEditor() {
       },
     });
 
+    const unsubscribeEntityPatch = subscribeEntityPatchEvents({
+      onPatch: (payload) => {
+        if (payload.entityType !== 'node' || payload.userId === Number(auth.user.id)) {
+          return;
+        }
+        const nodeId = `state-${payload.entityId}`;
+        applyRemoteNodePatch(nodeId, payload.entityId, payload.field, payload.value);
+      },
+    });
+
     const unsubscribe = subscribeNodeLockEvents({
       onAcquired: (payload) => {
         if (payload.entityType !== 'node' || payload.modelName !== modelName) {
@@ -362,6 +385,7 @@ function GraphEditor() {
     return () => {
       unsubscribePresence();
       unsubscribeCursor();
+      unsubscribeEntityPatch();
       unsubscribe();
       releaseActiveNodeLock(modelName);
       disconnectCollabSocket();
@@ -710,6 +734,7 @@ function GraphEditor() {
           releaseActiveNodeLock(modelName);
           closeNodeModal();
         }}
+        onPatch={handleNodePatch}
         onSave={(attributes) => {
           handleSaveNode(attributes);
           releaseActiveNodeLock(modelName);

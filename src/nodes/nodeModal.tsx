@@ -14,6 +14,7 @@ interface NodeModalProps {
     readonly isOpen: boolean;
     readonly onClose: () => void;
     readonly onSave: (attributes: NodeAttributes) => void;
+    readonly onPatch?: (field: string, value: unknown) => void;
     readonly onDelete?: () => void;
     readonly initialValues?: NodeAttributes;
     readonly isEditing: boolean;
@@ -29,7 +30,7 @@ const VAST_CLASSES = [
     "Class VI"
 ];
 
-export function NodeModal({ isOpen, onClose, onSave, onDelete, initialValues, isEditing }: NodeModalProps) {
+export function NodeModal({ isOpen, onClose, onSave, onPatch, onDelete, initialValues, isEditing }: NodeModalProps) {
     const [attributes, setAttributes] = useState<NodeAttributes>({
         stateName: '',
         stateNumber: '',
@@ -80,6 +81,9 @@ export function NodeModal({ isOpen, onClose, onSave, onDelete, initialValues, is
             ...prev,
             [name]: value
         }));
+        if (isEditing) {
+            onPatch?.(name, value);
+        }
     };
 
 	const handleSubmit = (e: React.FormEvent) => {
@@ -201,7 +205,12 @@ export function NodeModal({ isOpen, onClose, onSave, onDelete, initialValues, is
                             name="conditionLower"
                             id="condition-lower"
                             value={lowerBound}
-                            onChange={(e) => setLowerBound(e.target.value)}
+                            onChange={(e) => {
+                                setLowerBound(e.target.value);
+                                if (isEditing) {
+                                    onPatch?.('conditionLower', e.target.value);
+                                }
+                            }}
                             style={{
                                 width: '100%',
                                 padding: '8px',
@@ -219,7 +228,12 @@ export function NodeModal({ isOpen, onClose, onSave, onDelete, initialValues, is
                             name="conditionUpper"
                             id="condition-upper"
                             value={upperBound}
-                            onChange={(e) => setUpperBound(e.target.value)}
+                            onChange={(e) => {
+                                setUpperBound(e.target.value);
+                                if (isEditing) {
+                                    onPatch?.('conditionUpper', e.target.value);
+                                }
+                            }}
                             style={{
                                 width: '100%',
                                 padding: '8px',
@@ -283,6 +297,9 @@ export function NodeModal({ isOpen, onClose, onSave, onDelete, initialValues, is
 									reader.onload = () => {
 										const result = typeof reader.result === 'string' ? reader.result : '';
 										setAttributes(prev => ({ ...prev, imageUrl: result }));
+										if (isEditing) {
+											onPatch?.('imageUrl', result);
+										}
 									};
 									reader.readAsDataURL(file);
 								}}
