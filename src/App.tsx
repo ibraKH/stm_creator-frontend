@@ -93,6 +93,12 @@ function GraphEditor() {
   const canvasAreaRef = useRef<HTMLDivElement | null>(null);
   const cursorEmitFrameRef = useRef<number | null>(null);
   const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
+  const dragPatchFrameRef = useRef<number | null>(null);
+  const pendingDragPatchRef = useRef<{
+    nodeId: string;
+    graphStateId: number;
+    position: { x: number; y: number };
+  } | null>(null);
 
   const onboarding = useOnboarding();
 
@@ -270,16 +276,71 @@ function GraphEditor() {
     applyRemoteNodePatch(nodeId, graphStateId, field, value);
   };
 
-  const handleNodeDragStop = (_event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
+  const emitNodePositionPatch = (graphStateId: number, position: { x: number; y: number }) => {
+    if (!auth?.token || !modelName) {
+      return;
+    }
+
+    emitEntityPatch(modelName, graphStateId, 'position', {
+      x: position.x,
+      y: position.y,
+    });
+  };
+
+  const handleNodeDragStart = (_event: React.MouseEvent, node: { id: string }) => {
+    void requestNodeEdit(node.id);
+  };
+
+  const handleNodeDrag = (_event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
     const graphStateId = parseStateId(node.id);
     if (!auth?.token || !modelName || graphStateId === null) {
       return;
     }
 
-    emitEntityPatch(modelName, graphStateId, 'position', {
+    if (!nodeLocks[node.id]?.ownedByMe) {
+      return;
+    }
+
+    pendingDragPatchRef.current = {
+      nodeId: node.id,
+      graphStateId,
+      position: {
+        x: node.position.x,
+        y: node.position.y,
+      },
+    };
+
+    if (dragPatchFrameRef.current !== null) {
+      return;
+    }
+
+    dragPatchFrameRef.current = globalThis.requestAnimationFrame(() => {
+      dragPatchFrameRef.current = null;
+      const next = pendingDragPatchRef.current;
+      if (!next) {
+        return;
+      }
+      emitNodePositionPatch(next.graphStateId, next.position);
+    });
+  };
+
+  const handleNodeDragStop = (_event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
+    const graphStateId = parseStateId(node.id);
+    if (!auth?.token || !modelName || graphStateId === null || !nodeLocks[node.id]?.ownedByMe) {
+      return;
+    }
+
+    if (dragPatchFrameRef.current !== null) {
+      globalThis.cancelAnimationFrame(dragPatchFrameRef.current);
+      dragPatchFrameRef.current = null;
+    }
+    pendingDragPatchRef.current = null;
+
+    emitNodePositionPatch(graphStateId, {
       x: node.position.x,
       y: node.position.y,
     });
+    emitNodeLockRelease(modelName, graphStateId);
   };
 
   // Onboarding tour auto-start disabled — keep code for manual replay via Help
@@ -657,6 +718,8 @@ function GraphEditor() {
             onConnect={onConnect}
             onEdgeClick={onEdgeClick}
             onEdgeDoubleClick={onEdgeDoubleClick}
+            onNodeDragStart={handleNodeDragStart}
+            onNodeDrag={handleNodeDrag}
             onNodeDragStop={handleNodeDragStop}
             edgesFocusable
             elementsSelectable
