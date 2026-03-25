@@ -37,7 +37,9 @@ import {
   disconnectCollabSocket,
   emitNodeLockAcquire,
   emitNodeLockRelease,
+  subscribePresenceEvents,
   subscribeNodeLockEvents,
+  type OnlineUser,
 } from './collab/socket';
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
@@ -69,6 +71,7 @@ function GraphEditor() {
   });
   const [isGuest, setIsGuest] = useState(false);
   const [nodeLocks, setNodeLocks] = useState<NodeLockState>({});
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const activeNodeLockRef = useRef<{ nodeId: string | null; entityId: number | null }>({
     nodeId: null,
     entityId: null,
@@ -259,6 +262,7 @@ function GraphEditor() {
     if (!auth?.token || !modelName) {
       disconnectCollabSocket();
       setNodeLocks({});
+      setOnlineUsers([]);
       activeNodeLockRef.current = { nodeId: null, entityId: null };
       return;
     }
@@ -266,6 +270,22 @@ function GraphEditor() {
     connectCollabSocket({
       token: auth.token,
       modelName,
+    });
+
+    const unsubscribePresence = subscribePresenceEvents({
+      onSync: (payload) => {
+        setOnlineUsers(payload.users);
+      },
+      onJoin: (payload) => {
+        setOnlineUsers((prev) => {
+          const next = prev.filter((user) => user.userId !== payload.user.userId);
+          next.push(payload.user);
+          return next;
+        });
+      },
+      onLeave: (payload) => {
+        setOnlineUsers((prev) => prev.filter((user) => user.userId !== payload.userId));
+      },
     });
 
     const unsubscribe = subscribeNodeLockEvents({
@@ -301,10 +321,12 @@ function GraphEditor() {
     });
 
     return () => {
+      unsubscribePresence();
       unsubscribe();
       releaseActiveNodeLock(modelName);
       disconnectCollabSocket();
       setNodeLocks({});
+      setOnlineUsers([]);
     };
   }, [auth?.token, auth?.user.id, modelName]);
 
@@ -427,7 +449,7 @@ function GraphEditor() {
         )}
 
         {/* Lock status in header */}
-        <div className="meta-pill" style={{ marginLeft: 'auto' }}>
+        <div className="meta-pill">
           <span className="dot" style={{
             background: baseCanEdit ? 'var(--accent)' : 'var(--amber)',
           }} />
@@ -440,6 +462,40 @@ function GraphEditor() {
             {auth.user.email}
           </div>
         )}
+
+        <div className="presence-strip">
+          <div className="presence-title">
+            Online {onlineUsers.length > 0 ? `(${onlineUsers.length})` : ''}
+          </div>
+          {onlineUsers.length === 0 ? (
+            <div className="presence-empty">No active collaborators</div>
+          ) : (
+            <div className="presence-list">
+              {onlineUsers.map((user) => {
+                const label = user.email?.trim() || `User ${user.userId}`;
+                const initials = label.slice(0, 2).toUpperCase();
+                const isMe = auth?.user && Number(auth.user.id) === user.userId;
+                return (
+                  <div
+                    key={user.userId}
+                    className={`presence-chip${isMe ? ' me' : ''}`}
+                    title={`${label}${user.role ? ` (${user.role})` : ''}`}
+                  >
+                    <span
+                      className="presence-avatar"
+                      style={{ backgroundColor: user.color || '#3b82f6' }}
+                    >
+                      {initials}
+                    </span>
+                    <span className="presence-name">
+                      {isMe ? `${label} (You)` : label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ─── WORKSPACE ─── */}

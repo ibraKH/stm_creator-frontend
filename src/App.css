@@ -142,6 +142,72 @@
 .dot-green { background: var(--accent); }
 .dot-amber { background: var(--amber); }
 
+.presence-strip {
+  margin-left: auto;
+  min-width: 240px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.presence-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.presence-empty {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.presence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.presence-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 200px;
+  padding: 4px 8px 4px 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.presence-chip.me {
+  border-color: var(--accent);
+}
+
+.presence-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.presence-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* ─── WORKSPACE ─── */
 .workspace {
   display: flex;
