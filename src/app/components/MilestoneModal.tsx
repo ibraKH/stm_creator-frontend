@@ -29,6 +29,8 @@ export function MilestoneModal({
 }: MilestoneModalProps) {
     // User-entered name for the milestone (optional)
     const [milestoneName, setMilestoneName] = useState('');
+    // ID of the milestone pending delete confirmation; null when no confirm dialog is shown
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
@@ -37,9 +39,20 @@ export function MilestoneModal({
         setMilestoneName('');
     };
 
-    const handleDelete = (event: React.MouseEvent<HTMLButtonElement>, id: string) => {
+    const handleDeleteClick = (event: React.MouseEvent<HTMLButtonElement>, id: string) => {
         event.stopPropagation();
-        onDelete(id);
+        setPendingDeleteId(id);
+    };
+
+    const confirmDelete = () => {
+        if (pendingDeleteId) {
+            onDelete(pendingDeleteId);
+            setPendingDeleteId(null);
+        }
+    };
+
+    const cancelDelete = () => {
+        setPendingDeleteId(null);
     };
 
     return (
@@ -104,7 +117,7 @@ export function MilestoneModal({
                                                 Restore
                                             </button>
                                             <button
-                                                onClick={(e) => handleDelete(e, version.id)}
+                                                onClick={(e) => handleDeleteClick(e, version.id)}
                                                 style={deleteBtn}
                                             >
                                                 Delete
@@ -116,6 +129,19 @@ export function MilestoneModal({
                         </ul>
                     )}
                 </div>
+
+                {/* Delete confirmation dialog */}
+                {pendingDeleteId && (
+                    <div style={confirmOverlay}>
+                        <div style={confirmBox}>
+                            <p style={confirmText}>Are you sure you want to delete this milestone?</p>
+                            <div style={confirmActions}>
+                                <button onClick={cancelDelete} style={confirmCancelBtn}>Cancel</button>
+                                <button onClick={confirmDelete} style={confirmDeleteBtn}>Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -134,6 +160,7 @@ const overlay: React.CSSProperties = {
 };
 
 const modal: React.CSSProperties = {
+    position: 'relative',
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 24,
@@ -283,4 +310,59 @@ const deleteBtn: React.CSSProperties = {
     cursor: 'pointer',
     fontSize: 13,
     fontWeight: 500,
+};
+
+/* Delete confirmation dialog styles */
+const confirmOverlay: React.CSSProperties = {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 12,
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+};
+
+const confirmBox: React.CSSProperties = {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    width: 320,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+    textAlign: 'center',
+};
+
+const confirmText: React.CSSProperties = {
+    margin: '0 0 16px',
+    fontSize: 14,
+    color: '#064e3b',
+    fontWeight: 500,
+};
+
+const confirmActions: React.CSSProperties = {
+    display: 'flex',
+    gap: 10,
+    justifyContent: 'center',
+};
+
+const confirmCancelBtn: React.CSSProperties = {
+    padding: '8px 20px',
+    background: '#fff',
+    color: '#065f46',
+    border: '1px solid #F0D9A6',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontSize: 14,
+};
+
+const confirmDeleteBtn: React.CSSProperties = {
+    padding: '8px 20px',
+    background: '#ef4444',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
 };

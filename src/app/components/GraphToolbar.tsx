@@ -25,6 +25,8 @@ interface GraphToolbarProps {
   readonly showSelfTransitions: boolean;
   readonly bmrgData: BMRGData | null;
   readonly onOpenHelp: () => void;
+  /** Toggle the right-side comment panel */
+  readonly onToggleComments?: () => void;
   readonly userEmail?: string | null;
   readonly isGuest?: boolean;
   readonly onLogout?: () => void;
@@ -55,6 +57,7 @@ export function GraphToolbar({
   isSaving,
   showSelfTransitions,
   onOpenHelp,
+  onToggleComments,
   userEmail,
   onLogout,
   onSignIn,
@@ -325,6 +328,13 @@ export function GraphToolbar({
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5.5v.5"/></svg>
         Help
       </button>
+
+      {onToggleComments && (
+        <button data-tour="comments" onClick={onToggleComments} className="tb-btn">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 3h12v8H6l-3 2v-2H2z"/></svg>
+          Comment
+        </button>
+      )}
     </div>
   );
 }

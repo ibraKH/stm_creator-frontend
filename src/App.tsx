@@ -18,6 +18,7 @@ import { EdgeCreationHint } from './app/components/EdgeCreationHint';
 import { ErrorState } from './app/components/ErrorState';
 import { LoadingState } from './app/components/LoadingState';
 import { TipsPanel } from './app/components/TipsPanel';
+import { CommentPanel } from './app/components/CommentPanel';
 import { MilestoneModal } from './app/components/MilestoneModal';
 import { ModelListModal } from './app/components/ModelListModal';
 import { HelpModal } from './app/components/HelpModal';
@@ -59,6 +60,7 @@ function GraphEditor() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isModelListOpen, setIsModelListOpen] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(true);
+  const [commentsOpen, setCommentsOpen] = useState(false);
 
   const [auth, setAuth] = useState<{ token: string; user: AuthUser } | null>(() => {
     const token = authStorage.getToken();
@@ -390,6 +392,7 @@ function GraphEditor() {
           showSelfTransitions={showSelfTransitions}
           bmrgData={bmrgData}
           onOpenHelp={() => setIsHelpOpen(true)}
+          onToggleComments={() => setCommentsOpen(prev => !prev)}
           userEmail={auth?.user.email ?? null}
           isGuest={isGuest}
           canEdit={baseCanEdit}
@@ -516,10 +519,28 @@ function GraphEditor() {
           )}
         </div>
 
-        {/* RIGHT PANEL (Tips) */}
-        <div className={`right-panel ${tipsOpen ? 'open' : ''}`}>
+        {/* RIGHT PANEL — Tips or Comments */}
+        <div className={`right-panel ${tipsOpen || commentsOpen ? 'open' : ''}`}>
           <div className="rp-inner">
-            <TipsPanel onClose={() => setTipsOpen(false)} />
+            {commentsOpen ? (
+              <CommentPanel
+                onClose={() => setCommentsOpen(false)}
+                nodes={nodesWithCallbacks.map(n => ({ id: n.id, label: (n.data as any).label || n.id }))}
+                edges={edges.map(e => {
+                  const srcNode = nodesWithCallbacks.find(n => n.id === e.source);
+                  const tgtNode = nodesWithCallbacks.find(n => n.id === e.target);
+                  return {
+                    id: e.id,
+                    sourceLabel: (srcNode?.data as any)?.label || e.source,
+                    targetLabel: (tgtNode?.data as any)?.label || e.target,
+                  };
+                })}
+                userEmail={auth?.user.email || 'Guest'}
+                modelName={modelName || 'unnamed'}
+              />
+            ) : tipsOpen ? (
+              <TipsPanel onClose={() => setTipsOpen(false)} />
+            ) : null}
           </div>
         </div>
       </div>
