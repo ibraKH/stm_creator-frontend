@@ -284,6 +284,45 @@
   background: var(--bg);
 }
 
+.cursor-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.remote-cursor {
+  position: absolute;
+  transform: translate(2px, 2px);
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.remote-cursor-pointer {
+  width: 0;
+  height: 0;
+  border-left: 0 solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 18px solid var(--cursor-color, #3b82f6);
+  transform: rotate(-18deg);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.22));
+  flex: 0 0 auto;
+}
+
+.remote-cursor-label {
+  margin-top: 10px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--cursor-color, #3b82f6);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+}
+
 /* ─── RIGHT PANEL ─── */
 .right-panel {
   width: 0;
