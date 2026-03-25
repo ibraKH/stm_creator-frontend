@@ -162,6 +162,31 @@ export function getCollabSocket(): CollabSocket | null {
   return socket;
 }
 
+export function subscribePresenceEvents(handlers: {
+  onSync?: (payload: PresenceSyncPayload) => void;
+  onJoin?: (payload: PresenceJoinPayload) => void;
+  onLeave?: (payload: PresenceLeavePayload) => void;
+}): () => void {
+  const activeSocket = socket;
+  if (!activeSocket) {
+    return () => undefined;
+  }
+
+  const handleSync = (payload: PresenceSyncPayload) => handlers.onSync?.(payload);
+  const handleJoin = (payload: PresenceJoinPayload) => handlers.onJoin?.(payload);
+  const handleLeave = (payload: PresenceLeavePayload) => handlers.onLeave?.(payload);
+
+  activeSocket.on('presence:sync', handleSync);
+  activeSocket.on('presence:join', handleJoin);
+  activeSocket.on('presence:leave', handleLeave);
+
+  return () => {
+    activeSocket.off('presence:sync', handleSync);
+    activeSocket.off('presence:join', handleJoin);
+    activeSocket.off('presence:leave', handleLeave);
+  };
+}
+
 export function emitNodeLockAcquire(modelName: string, entityId: number): void {
   socket?.emit('lock:acquire', { entityType: 'node', entityId, modelName });
 }
