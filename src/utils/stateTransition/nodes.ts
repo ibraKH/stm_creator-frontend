@@ -24,6 +24,20 @@ function stateToNodeAttributes(state: StateData): NodeAttributes {
     };
 }
 
+function getStoredPosition(state: StateData): { x: number; y: number } | null {
+    const position = state.attributes?.position;
+    if (!position || typeof position !== 'object') {
+        return null;
+    }
+
+    const { x, y } = position as { x?: unknown; y?: unknown };
+    if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {
+        return null;
+    }
+
+    return { x, y };
+}
+
 export function statesToNodes(
     states: StateData[],
     onLabelChange: (id: string, newLabel: string) => void,
@@ -34,7 +48,7 @@ export function statesToNodes(
 
     return states.map((state) => {
         const graphId = getGraphStateId(state);
-        const position = positions.get(graphId) ?? { x: 0, y: 0 };
+        const position = getStoredPosition(state) ?? positions.get(graphId) ?? { x: 0, y: 0 };
 
         return {
             id: `state-${graphId}`,
