@@ -5,7 +5,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 import '@xyflow/react/dist/style.css';
@@ -76,6 +76,7 @@ function GraphEditor() {
   const [isModelListOpen, setIsModelListOpen] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(true);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsVersion, setCommentsVersion] = useState(0);
 
   const [auth, setAuth] = useState<{ token: string; user: AuthUser } | null>(() => {
     const token = authStorage.getToken();
@@ -264,6 +265,55 @@ function GraphEditor() {
   });
 
   const modelName = bmrgData?.stm_name?.trim() || null;
+
+  useEffect(() => {
+    if (!modelName) return;
+
+    const timer = window.setInterval(() => {
+      setCommentsVersion((prev) => prev + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [modelName]);
+
+  const commentCountMap = useMemo(() => {
+    if (!modelName) return {} as Record<string, number>;
+
+    try {
+      const raw = localStorage.getItem(`stmCreator.comments.${modelName}`);
+      const comments = raw ? JSON.parse(raw) : [];
+      const counts: Record<string, number> = {};
+
+      nodesWithCallbacks.forEach((node) => {
+        const label = ((node.data as any)?.label || '').trim();
+        if (!label) return;
+
+        const mentionToken = `@[${label}]`;
+
+        const count = comments.filter((comment: any) =>
+          typeof comment?.text === 'string' && comment.text.includes(mentionToken)
+        ).length;
+
+        counts[node.id] = count;
+      });
+
+      return counts;
+    } catch {
+      return {} as Record<string, number>;
+    }
+  }, [modelName, nodesWithCallbacks, commentsVersion]);
+
+  const nodesForRender = nodesWithCallbacks.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      commentCount: commentCountMap[node.id] ?? 0,
+      onCommentBubbleClick: () => {
+        setCommentsOpen(true);
+        setTipsOpen(false);
+      },
+    },
+  }));
 
   const handleNodePatch = (field: string, value: unknown) => {
     const nodeId = initialNodeValues?.id;
@@ -708,7 +758,7 @@ function GraphEditor() {
           onMouseLeave={handleCanvasMouseLeave}
         >
           <ReactFlow
-            nodes={nodesWithCallbacks}
+            nodes={nodesForRender}
             edges={edges}
             nodeTypes={nodeTypes}
             edgeTypes={customEdgeTypes}
@@ -780,10 +830,10 @@ function GraphEditor() {
             {commentsOpen ? (
               <CommentPanel
                 onClose={() => setCommentsOpen(false)}
-                nodes={nodesWithCallbacks.map(n => ({ id: n.id, label: (n.data as any).label || n.id }))}
+                nodes={nodesForRender.map(n => ({ id: n.id, label: (n.data as any).label || n.id }))}
                 edges={edges.map(e => {
-                  const srcNode = nodesWithCallbacks.find(n => n.id === e.source);
-                  const tgtNode = nodesWithCallbacks.find(n => n.id === e.target);
+                  const srcNode = nodesForRender.find(n => n.id === e.source);
+                  const tgtNode = nodesForRender.find(n => n.id === e.target);
                   return {
                     id: e.id,
                     sourceLabel: (srcNode?.data as any)?.label || e.source,

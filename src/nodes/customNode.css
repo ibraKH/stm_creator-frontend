@@ -231,3 +231,30 @@
 .node-container:hover .handle {
   opacity: 1;
 }
+
+.node-comment-bubble {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  z-index: 6;
+}
+
+.node-comment-bubble:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}

@@ -14,6 +14,8 @@ export type CustomNodeData = {
     isLockedByMe?: boolean;
     lockOwner?: string | null;
     lockColor?: string | null;
+    commentCount?: number;
+    onCommentBubbleClick?: (id: string) => void;
 };
 
 export type PositionLoggerNode = Node<CustomNodeData, 'position-logger'>;

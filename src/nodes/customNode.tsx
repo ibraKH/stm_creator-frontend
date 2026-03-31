@@ -67,6 +67,10 @@ export function CustomNode({ data, id }: CustomNodeProps) {
             data.onNodeClick(id);
         }
     };
+    const handleCommentBubbleClick = (event: React.MouseEvent) => {
+        event.stopPropagation();
+        data.onCommentBubbleClick?.(id);
+    };
 
     const stateNumber = data.attributes?.stateNumber || '';
     const vastClass = data.attributes?.vastClass || '';
@@ -121,6 +125,16 @@ export function CustomNode({ data, id }: CustomNodeProps) {
                         <div className={`state-number-badge class-color-${classNum}-bg`}>
                             {stateNumber}
                         </div>
+                    )}
+                    {(data.commentCount ?? 0) > 0 && (
+                        <button
+                            type="button"
+                            className="node-comment-bubble"
+                            onClick={handleCommentBubbleClick}
+                            title={`${data.commentCount} comment${data.commentCount === 1 ? '' : 's'}`}
+                        >
+                            💬 {data.commentCount}
+                        </button>
                     )}
 
                     <div className="node-header">
