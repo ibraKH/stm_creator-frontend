@@ -178,6 +178,7 @@ export function createCustomNode(
             condition: attributes.condition,
             imageUrl: attributes.imageUrl,
             note: attributes.note,
+            template: attributes.template,
         },
     };
 
