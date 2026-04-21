@@ -315,6 +315,37 @@ function GraphEditor() {
     },
   }));
 
+  // ---- Save validation: state id must be unique ----
+  const validateUniqueStateIds = () => {
+    const counts = new Map<string, number>();
+
+    nodesWithCallbacks.forEach((node) => {
+      const id = String(node.id ?? '').trim();
+      if (!id) return;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    });
+
+    const duplicates = Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([id]) => id);
+
+    return {
+      valid: duplicates.length === 0,
+      duplicates,
+    };
+  };
+
+  const handleSaveModelWithValidation = async () => {
+    const result = validateUniqueStateIds();
+
+    if (!result.valid) {
+      window.alert(`State ID must be unique. Duplicate IDs: ${result.duplicates.join(', ')}`);
+      return;
+    }
+
+    await handleSaveModel();
+  };
+
   const handleNodePatch = (field: string, value: unknown) => {
     const nodeId = initialNodeValues?.id;
     const graphStateId = nodeId ? parseStateId(nodeId) : null;
@@ -392,21 +423,6 @@ function GraphEditor() {
     });
     emitNodeLockRelease(modelName, graphStateId);
   };
-
-  // Onboarding tour auto-start disabled — keep code for manual replay via Help
-  // useEffect(() => {
-  //   if (!(auth || isGuest)) return;
-  //   if (isLoading) return;
-  //   if (onboarding.finished) return;
-  //   const id1 = requestAnimationFrame(() => {
-  //     const id2 = requestAnimationFrame(() => {
-  //       setTourOpen(true);
-  //       onboarding.start();
-  //     });
-  //     (globalThis as any).__raf2 = id2;
-  //   });
-  //   return () => cancelAnimationFrame(id1);
-  // }, [auth, isGuest, isLoading, onboarding]);
 
   useEffect(() => {
     modelNameFromLocks.current = modelName;
@@ -561,7 +577,6 @@ function GraphEditor() {
   const plausibleTransitionCount =
     bmrgData ? bmrgData.transitions.filter((t) => t.time_25 === 1).length : 0;
 
-  // Count states by VAST class for sidebar legend
   const classCountMap: Record<string, number> = {};
   if (bmrgData) {
     for (const s of bmrgData.states) {
@@ -613,13 +628,12 @@ function GraphEditor() {
 
   return (
     <div className="app-container">
-      {/* ─── TOOLBAR ─── */}
       <div data-tour="toolbar">
         <GraphToolbar
           onAddNode={openAddNodeModal}
           onToggleEdgeCreation={toggleEdgeCreationMode}
           onLoadEdges={loadExistingEdges}
-          onSaveModel={handleSaveModel}
+          onSaveModel={handleSaveModelWithValidation}
           onOpenModelList={() => setIsModelListOpen(true)}
           onCreateNewModel={handleCreateNewModel}
           onDeleteModel={handleDeleteModel}
@@ -652,7 +666,6 @@ function GraphEditor() {
         />
       </div>
 
-      {/* ─── HEADER ─── */}
       <div className="header-bar">
         <div className="model-name">{bmrgData?.stm_name || 'STM Creator'}</div>
         {bmrgData && (
@@ -668,15 +681,16 @@ function GraphEditor() {
           </>
         )}
 
-        {/* Lock status in header */}
         <div className="meta-pill">
-          <span className="dot" style={{
-            background: baseCanEdit ? 'var(--accent)' : 'var(--amber)',
-          }} />
+          <span
+            className="dot"
+            style={{
+              background: baseCanEdit ? 'var(--accent)' : 'var(--amber)',
+            }}
+          />
           {baseCanEdit ? 'Node-level editing' : 'Read-only'}
         </div>
 
-        {/* Auth info in header */}
         {auth?.user.email && (
           <div className="meta-pill">
             {auth.user.email}
@@ -718,9 +732,7 @@ function GraphEditor() {
         </div>
       </div>
 
-      {/* ─── WORKSPACE ─── */}
       <div className="workspace">
-        {/* LEFT SIDEBAR */}
         <div className="sidebar">
           <div className="sidebar-section">
             <div className="sidebar-label">Classes</div>
@@ -738,7 +750,6 @@ function GraphEditor() {
 
           <div className="sidebar-divider" />
 
-          {/* Transition Filters in sidebar */}
           <TransitionFilterPanel
             bmrgData={bmrgData}
             showSelfTransitions={showSelfTransitions}
@@ -750,7 +761,6 @@ function GraphEditor() {
           />
         </div>
 
-        {/* CANVAS */}
         <div
           ref={canvasAreaRef}
           className="canvas-area"
@@ -801,11 +811,13 @@ function GraphEditor() {
                 <div
                   key={cursor.userId}
                   className="remote-cursor"
-                  style={{
-                    left: cursor.x,
-                    top: cursor.y,
-                    '--cursor-color': cursor.color,
-                  } as React.CSSProperties}
+                  style={
+                    {
+                      left: cursor.x,
+                      top: cursor.y,
+                      '--cursor-color': cursor.color,
+                    } as React.CSSProperties
+                  }
                 >
                   <div className="remote-cursor-pointer" />
                   <div className="remote-cursor-label">{label}</div>
@@ -814,7 +826,6 @@ function GraphEditor() {
             })}
           </div>
 
-          {/* Status bar */}
           {bmrgData && (
             <div className="statusbar">
               <div className="statusbar-dot" />
@@ -824,16 +835,15 @@ function GraphEditor() {
           )}
         </div>
 
-        {/* RIGHT PANEL — Tips or Comments */}
         <div className={`right-panel ${tipsOpen || commentsOpen ? 'open' : ''}`}>
           <div className="rp-inner">
             {commentsOpen ? (
               <CommentPanel
                 onClose={() => setCommentsOpen(false)}
-                nodes={nodesForRender.map(n => ({ id: n.id, label: (n.data as any).label || n.id }))}
-                edges={edges.map(e => {
-                  const srcNode = nodesForRender.find(n => n.id === e.source);
-                  const tgtNode = nodesForRender.find(n => n.id === e.target);
+                nodes={nodesForRender.map((n) => ({ id: n.id, label: (n.data as any).label || n.id }))}
+                edges={edges.map((e) => {
+                  const srcNode = nodesForRender.find((n) => n.id === e.source);
+                  const tgtNode = nodesForRender.find((n) => n.id === e.target);
                   return {
                     id: e.id,
                     sourceLabel: (srcNode?.data as any)?.label || e.source,
