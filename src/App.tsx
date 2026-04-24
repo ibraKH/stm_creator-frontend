@@ -652,6 +652,7 @@ function GraphEditor() {
           onOpenHelp={() => setIsHelpOpen(true)}
           onToggleComments={() => setCommentsOpen(prev => !prev)}
           userEmail={auth?.user.email ?? null}
+          userRole={auth?.user.role ?? null}
           isGuest={isGuest}
           canEdit={baseCanEdit}
           onLogout={() => {

@@ -28,6 +28,7 @@ interface GraphToolbarProps {
   /** Toggle the right-side comment panel */
   readonly onToggleComments?: () => void;
   readonly userEmail?: string | null;
+  readonly userRole?: string | null;
   readonly isGuest?: boolean;
   readonly onLogout?: () => void;
   readonly onSignIn?: () => void;
@@ -59,6 +60,7 @@ export function GraphToolbar({
   onOpenHelp,
   onToggleComments,
   userEmail,
+  userRole,
   onLogout,
   onSignIn,
   canEdit,
@@ -318,6 +320,11 @@ export function GraphToolbar({
       <div className="tb-sep" />
 
       {/* Auth */}
+      {userRole === 'Admin' && (
+        <a href="/admin" className="tb-btn" style={{ textDecoration: 'none', color: 'inherit' }}>
+          Admin Panel
+        </a>
+      )}
       {userEmail ? (
         <button onClick={onLogout} className="tb-btn">Logout</button>
       ) : (
