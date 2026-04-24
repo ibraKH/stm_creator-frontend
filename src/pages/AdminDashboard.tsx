@@ -290,10 +290,10 @@ export default function AdminDashboard() {
         <section id="section-audit" className={styles.section}>
           <h2 className={styles.sectionTitle}>Audit Log</h2>
           <div style={{
-            background: '#fff',
-            border: '1px solid #E0EDE6',
-            borderRadius: 12,
-            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+            background: '#ffffff',
+            border: '1px solid #eaecf0',
+            borderRadius: 8,
+            boxShadow: '0 1px 2px 0 rgba(16, 24, 40, 0.05)',
             overflow: 'hidden',
           }}>
             {auditLoading ? (
@@ -316,11 +316,11 @@ export default function AdminDashboard() {
                         key={log.id}
                         className={i % 2 === 0 ? styles.auditRowEven : styles.auditRowOdd}
                       >
-                        <td style={{ whiteSpace: 'nowrap', color: '#6B7280', fontVariantNumeric: 'tabular-nums' }}>
+                        <td style={{ whiteSpace: 'nowrap', color: '#475467', fontVariantNumeric: 'tabular-nums' }}>
                           {new Date(log.created_at).toLocaleString()}
                         </td>
-                        <td style={{ color: '#1A3C2E', fontWeight: 500 }}>{log.actor_email}</td>
-                        <td style={{ color: '#1A3C2E' }}>{log.action}</td>
+                        <td style={{ color: '#101828', fontWeight: 500 }}>{log.actor_email}</td>
+                        <td style={{ color: '#475467' }}>{log.action}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -389,7 +389,7 @@ function IconChevronLeft() {
 
 function IconUsersGold() {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#B8860B" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#175cd3" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -400,7 +400,7 @@ function IconUsersGold() {
 
 function IconCheckGold() {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#B8860B" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#027a48" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
       <polyline points="22 4 12 14.01 9 11.01" />
     </svg>
@@ -409,7 +409,7 @@ function IconCheckGold() {
 
 function IconAlertGold() {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#B8860B" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#b54708" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="10" />
       <line x1="12" y1="8" x2="12" y2="12" />
       <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -419,7 +419,7 @@ function IconAlertGold() {
 
 function IconClockGold() {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#B8860B" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#5925dc" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
     </svg>

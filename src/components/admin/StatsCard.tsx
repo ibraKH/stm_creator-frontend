@@ -8,32 +8,38 @@ interface StatsCardProps {
 export function StatsCard({ icon, value, label, loading = false }: StatsCardProps) {
   return (
     <div style={{
-      background: '#fff',
-      border: '1px solid #E0EDE6',
-      borderRadius: 12,
+      background: '#ffffff',
+      border: '1px solid #eaecf0',
+      borderRadius: 8,
       padding: '20px 24px',
       display: 'flex',
       flexDirection: 'column',
-      gap: 8,
-      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      gap: 10,
+      boxShadow: '0 1px 2px 0 rgba(16, 24, 40, 0.05)',
       flex: 1,
       minWidth: 0,
     }}>
-      <div style={{ color: '#B8860B', display: 'flex', alignItems: 'center' }}>{icon}</div>
+      <div style={{ display: 'flex', alignItems: 'center' }}>{icon}</div>
       {loading ? (
         <div style={{
-          height: 36,
-          width: '60%',
-          background: '#E0EDE6',
-          borderRadius: 8,
+          height: 34,
+          width: '55%',
+          background: '#eaecf0',
+          borderRadius: 6,
           animation: 'skeletonPulse 1.4s ease-in-out infinite',
         }} />
       ) : (
-        <div style={{ fontSize: 32, fontWeight: 700, color: '#1A3C2E', lineHeight: 1 }}>
+        <div style={{
+          fontSize: 30,
+          fontWeight: 700,
+          color: '#101828',
+          lineHeight: 1,
+          letterSpacing: '-0.02em',
+        }}>
           {value}
         </div>
       )}
-      <div style={{ fontSize: 13, color: '#6B7280', fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 13, color: '#475467', fontWeight: 500 }}>{label}</div>
     </div>
   );
 }

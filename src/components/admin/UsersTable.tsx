@@ -19,9 +19,15 @@ interface UsersTableProps {
 
 const PAGE_SIZE = 10;
 
+const ROLE_BADGE: Record<User['role'], React.CSSProperties> = {
+  Admin:  { background: '#ecfdf3', color: '#027a48', borderColor: '#abefc6' },
+  Editor: { background: '#eff8ff', color: '#175cd3', borderColor: '#b2ddff' },
+  Viewer: { background: '#f4f3ff', color: '#5925dc', borderColor: '#d9d6fe' },
+};
+
 export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDeleteUser }: UsersTableProps) {
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'All' | 'Viewer' | 'Editor' | 'Admin'>('All');
+  const [roleFilter, setRoleFilter] = useState<'All' | User['role']>('All');
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState<Record<number, Record<string, boolean>>>({});
 
@@ -42,9 +48,7 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
         u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
       );
     }
-    if (roleFilter !== 'All') {
-      result = result.filter(u => u.role === roleFilter);
-    }
+    if (roleFilter !== 'All') result = result.filter(u => u.role === roleFilter);
     return result;
   }, [users, search, roleFilter]);
 
@@ -54,48 +58,38 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
 
   const handleRoleChange = async (userId: number, role: string) => {
     setOp(userId, 'role', true);
-    try {
-      await onRoleChange(userId, role);
-    } finally {
-      setOp(userId, 'role', false);
-    }
+    try { await onRoleChange(userId, role); } finally { setOp(userId, 'role', false); }
   };
 
   const handleRevoke = async (userId: number) => {
     setOp(userId, 'revoke', true);
-    try {
-      await onRevokeSession(userId);
-    } finally {
-      setOp(userId, 'revoke', false);
-    }
+    try { await onRevokeSession(userId); } finally { setOp(userId, 'revoke', false); }
   };
 
   const handleDelete = async (userId: number) => {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
     setOp(userId, 'delete', true);
-    try {
-      await onDeleteUser(userId);
-    } finally {
-      setOp(userId, 'delete', false);
-    }
+    try { await onDeleteUser(userId); } finally { setOp(userId, 'delete', false); }
   };
 
   return (
     <div style={{
-      background: '#fff',
-      border: '1px solid #E0EDE6',
-      borderRadius: 12,
-      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      background: '#ffffff',
+      border: '1px solid #eaecf0',
+      borderRadius: 8,
+      boxShadow: '0 1px 2px 0 rgba(16, 24, 40, 0.05)',
       overflow: 'hidden',
     }}>
-      {/* Controls */}
+
+      {/* ── Controls ── */}
       <div style={{
         padding: '14px 20px',
-        borderBottom: '1px solid #E0EDE6',
+        borderBottom: '1px solid #eaecf0',
         display: 'flex',
-        gap: 12,
+        gap: 10,
         flexWrap: 'wrap',
         alignItems: 'center',
+        background: '#f9fafb',
       }}>
         <input
           type="search"
@@ -107,7 +101,7 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
         <select
           value={roleFilter}
           onChange={e => { setRoleFilter(e.target.value as typeof roleFilter); setPage(1); }}
-          style={{ ...inputStyle, flex: 'none', width: 'auto', minWidth: 140 }}
+          style={{ ...inputStyle, flex: 'none', width: 'auto', minWidth: 136 }}
         >
           <option value="All">All roles</option>
           <option value="Viewer">Viewer</option>
@@ -116,11 +110,11 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
         </select>
       </div>
 
-      {/* Table */}
+      {/* ── Table ── */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
           <thead>
-            <tr style={{ background: '#F0FAF4', borderBottom: '1px solid #E0EDE6' }}>
+            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #eaecf0' }}>
               {['Name', 'Email', 'Role', 'Verified', 'Joined', 'Actions'].map(col => (
                 <th key={col} style={thStyle}>{col}</th>
               ))}
@@ -129,16 +123,16 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
           <tbody>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #E0EDE6' }}>
+                <tr key={i} style={{ borderBottom: '1px solid #eaecf0' }}>
                   {Array.from({ length: 6 }).map((_, j) => (
                     <td key={j} style={tdStyle}>
                       <div style={{
-                        height: 16,
-                        background: '#E0EDE6',
+                        height: 14,
+                        background: '#eaecf0',
                         borderRadius: 4,
-                        width: j === 5 ? 160 : '70%',
+                        width: j === 5 ? 160 : '65%',
                         animation: 'skeletonPulse 1.4s ease-in-out infinite',
-                        animationDelay: `${i * 0.1}s`,
+                        animationDelay: `${i * 0.08}s`,
                       }} />
                     </td>
                   ))}
@@ -146,30 +140,34 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
               ))
             ) : pageUsers.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ ...tdStyle, textAlign: 'center', padding: '40px 20px', color: '#6B7280' }}>
+                <td colSpan={6} style={{ ...tdStyle, textAlign: 'center', padding: '48px 20px', color: '#475467' }}>
                   No users found.
                 </td>
               </tr>
             ) : (
               pageUsers.map(user => (
-                <tr key={user.id} style={{ borderBottom: '1px solid #E0EDE6' }}>
-                  <td style={{ ...tdStyle, fontWeight: 500 }}>{user.name}</td>
-                  <td style={{ ...tdStyle, color: '#6B7280' }}>{user.email}</td>
+                <tr key={user.id} style={{ borderBottom: '1px solid #eaecf0' }}>
+                  <td style={{ ...tdStyle, fontWeight: 500, color: '#101828' }}>{user.name}</td>
+                  <td style={{ ...tdStyle, color: '#475467' }}>{user.email}</td>
                   <td style={tdStyle}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <span style={{ ...roleBadgeBase, ...ROLE_BADGE[user.role] }}>
+                        {user.role}
+                      </span>
                       <select
                         value={user.role}
                         onChange={e => handleRoleChange(user.id, e.target.value)}
                         disabled={isOp(user.id, 'role')}
+                        aria-label={`Change role for ${user.name}`}
                         style={{
-                          padding: '4px 8px',
+                          padding: '3px 6px',
                           borderRadius: 6,
-                          border: '1px solid #E0EDE6',
-                          background: '#fff',
-                          color: '#1A3C2E',
-                          fontSize: 13,
+                          border: '1px solid #eaecf0',
+                          background: '#ffffff',
+                          color: '#475467',
+                          fontSize: 12,
                           cursor: isOp(user.id, 'role') ? 'not-allowed' : 'pointer',
-                          opacity: isOp(user.id, 'role') ? 0.6 : 1,
+                          opacity: isOp(user.id, 'role') ? 0.5 : 1,
                           fontFamily: 'inherit',
                         }}
                       >
@@ -177,38 +175,38 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
                         <option value="Editor">Editor</option>
                         <option value="Admin">Admin</option>
                       </select>
-                      {isOp(user.id, 'role') && <Spinner dark />}
+                      {isOp(user.id, 'role') && <Spinner color="#475467" />}
                     </div>
                   </td>
                   <td style={tdStyle}>
                     {user.is_verified ? (
-                      <span style={{ ...badgeStyle, background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' }}>
+                      <span style={{ ...badgeBase, background: '#ecfdf3', color: '#027a48', borderColor: '#abefc6' }}>
                         ✓ Verified
                       </span>
                     ) : (
-                      <span style={{ ...badgeStyle, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                      <span style={{ ...badgeBase, background: '#fffaeb', color: '#b54708', borderColor: '#fedf89' }}>
                         ⏳ Pending
                       </span>
                     )}
                   </td>
-                  <td style={{ ...tdStyle, color: '#6B7280', whiteSpace: 'nowrap' }}>
+                  <td style={{ ...tdStyle, color: '#475467', whiteSpace: 'nowrap' }}>
                     {new Date(user.created_at).toLocaleDateString()}
                   </td>
                   <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap' }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <button
                         onClick={() => handleRevoke(user.id)}
                         disabled={isOp(user.id, 'revoke')}
-                        style={revokeBtn(isOp(user.id, 'revoke'))}
+                        style={secondaryBtn(isOp(user.id, 'revoke'))}
                       >
-                        {isOp(user.id, 'revoke') ? <><Spinner small /> Revoking…</> : 'Revoke Session'}
+                        {isOp(user.id, 'revoke') ? <><Spinner small color="#475467" /> Revoking…</> : 'Revoke'}
                       </button>
                       <button
                         onClick={() => handleDelete(user.id)}
                         disabled={isOp(user.id, 'delete')}
-                        style={deleteBtn(isOp(user.id, 'delete'))}
+                        style={dangerBtn(isOp(user.id, 'delete'))}
                       >
-                        {isOp(user.id, 'delete') ? <><Spinner small darkRed /> Deleting…</> : 'Delete'}
+                        {isOp(user.id, 'delete') ? <><Spinner small color="#c01048" /> Deleting…</> : 'Delete'}
                       </button>
                     </div>
                   </td>
@@ -219,34 +217,35 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
         </table>
       </div>
 
-      {/* Pagination */}
+      {/* ── Pagination ── */}
       {!loading && filtered.length > 0 && (
         <div style={{
           padding: '12px 20px',
-          borderTop: '1px solid #E0EDE6',
+          borderTop: '1px solid #eaecf0',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           fontSize: 13,
-          color: '#6B7280',
+          color: '#475467',
           flexWrap: 'wrap',
           gap: 8,
+          background: '#f9fafb',
         }}>
           <span>
             Showing {(clampedPage - 1) * PAGE_SIZE + 1}–{Math.min(clampedPage * PAGE_SIZE, filtered.length)} of {filtered.length} users
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={clampedPage <= 1}
-              style={paginationBtn(clampedPage <= 1)}
+              style={secondaryBtn(clampedPage <= 1)}
             >
               ← Previous
             </button>
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={clampedPage >= totalPages}
-              style={paginationBtn(clampedPage >= totalPages)}
+              style={secondaryBtn(clampedPage >= totalPages)}
             >
               Next →
             </button>
@@ -257,105 +256,105 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
   );
 }
 
-function Spinner({ small, dark, darkRed }: { small?: boolean; dark?: boolean; darkRed?: boolean }) {
-  const size = small ? 11 : 14;
-  const topColor = darkRed ? '#DC2626' : dark ? '#2D6A4F' : '#B8860B';
-  const baseColor = darkRed ? 'rgba(220,38,38,0.2)' : dark ? 'rgba(45,106,79,0.2)' : 'rgba(184,134,11,0.2)';
+/* ── Spinner ── */
+function Spinner({ small, color }: { small?: boolean; color: string }) {
+  const size = small ? 11 : 13;
   return (
     <span style={{
       display: 'inline-block',
       width: size,
       height: size,
-      border: `2px solid ${baseColor}`,
-      borderTopColor: topColor,
+      border: `1.5px solid ${color}30`,
+      borderTopColor: color,
       borderRadius: '50%',
-      animation: 'adminSpin 0.6s linear infinite',
+      animation: 'adminSpin 0.55s linear infinite',
       verticalAlign: 'middle',
       flexShrink: 0,
     }} />
   );
 }
 
+/* ── Styles ── */
+
 const inputStyle: React.CSSProperties = {
   padding: '8px 12px',
   borderRadius: 8,
-  border: '1px solid #E0EDE6',
-  background: '#fff',
-  color: '#1A3C2E',
+  border: '1px solid #eaecf0',
+  background: '#ffffff',
+  color: '#101828',
   fontSize: 14,
   outline: 'none',
   flex: 1,
   minWidth: 180,
   fontFamily: 'inherit',
+  boxShadow: '0 1px 2px 0 rgba(16, 24, 40, 0.05)',
 };
 
 const thStyle: React.CSSProperties = {
-  padding: '10px 16px',
+  padding: '11px 16px',
   textAlign: 'left',
   fontWeight: 600,
-  color: '#1A3C2E',
-  fontSize: 13,
+  color: '#475467',
+  fontSize: 12,
   whiteSpace: 'nowrap',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
 };
 
 const tdStyle: React.CSSProperties = {
-  padding: '11px 16px',
-  color: '#1A3C2E',
+  padding: '13px 16px',
+  color: '#101828',
   verticalAlign: 'middle',
 };
 
-const badgeStyle: React.CSSProperties = {
+const badgeBase: React.CSSProperties = {
   display: 'inline-block',
-  padding: '3px 9px',
-  borderRadius: 20,
+  padding: '2px 8px',
+  borderRadius: 16,
   fontSize: 12,
   fontWeight: 500,
   whiteSpace: 'nowrap',
+  border: '1px solid',
 };
 
-const revokeBtn = (disabled: boolean): React.CSSProperties => ({
-  padding: '5px 10px',
-  background: disabled ? '#F7FCF9' : '#FFF7E6',
-  color: disabled ? '#6B7280' : '#4a3c12',
-  border: '1px dashed #E7D2A2',
-  borderRadius: 6,
+const roleBadgeBase: React.CSSProperties = {
+  ...badgeBase,
+  border: '1px solid',
+};
+
+const secondaryBtn = (disabled: boolean): React.CSSProperties => ({
+  padding: '5px 12px',
+  background: disabled ? '#f9fafb' : '#ffffff',
+  color: disabled ? '#98a2b3' : '#344054',
+  border: '1px solid #eaecf0',
+  borderRadius: 8,
   cursor: disabled ? 'not-allowed' : 'pointer',
   fontSize: 12,
   fontWeight: 500,
-  opacity: disabled ? 0.7 : 1,
+  opacity: disabled ? 0.6 : 1,
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 4,
+  gap: 5,
   fontFamily: 'inherit',
   whiteSpace: 'nowrap',
+  boxShadow: disabled ? 'none' : '0 1px 2px 0 rgba(16, 24, 40, 0.05)',
+  transition: 'background 0.1s ease',
 });
 
-const deleteBtn = (disabled: boolean): React.CSSProperties => ({
-  padding: '5px 10px',
-  background: disabled ? '#F7FCF9' : '#FEF2F2',
-  color: disabled ? '#6B7280' : '#DC2626',
-  border: '1px solid #FECACA',
-  borderRadius: 6,
+const dangerBtn = (disabled: boolean): React.CSSProperties => ({
+  padding: '5px 12px',
+  background: disabled ? '#f9fafb' : '#fff1f3',
+  color: disabled ? '#98a2b3' : '#c01048',
+  border: `1px solid ${disabled ? '#eaecf0' : '#fecdd6'}`,
+  borderRadius: 8,
   cursor: disabled ? 'not-allowed' : 'pointer',
   fontSize: 12,
   fontWeight: 500,
-  opacity: disabled ? 0.7 : 1,
+  opacity: disabled ? 0.6 : 1,
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 4,
+  gap: 5,
   fontFamily: 'inherit',
   whiteSpace: 'nowrap',
-});
-
-const paginationBtn = (disabled: boolean): React.CSSProperties => ({
-  padding: '6px 14px',
-  background: '#fff',
-  color: disabled ? '#6B7280' : '#2D6A4F',
-  border: '1px solid #E0EDE6',
-  borderRadius: 7,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-  fontSize: 13,
-  fontWeight: 500,
-  opacity: disabled ? 0.5 : 1,
-  fontFamily: 'inherit',
+  boxShadow: disabled ? 'none' : '0 1px 2px 0 rgba(16, 24, 40, 0.05)',
 });
