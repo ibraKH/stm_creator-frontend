@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { ConfirmModal, type ConfirmModalProps } from './ConfirmModal';
 
 export interface User {
   id: number;
@@ -30,6 +31,7 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
   const [roleFilter, setRoleFilter] = useState<'All' | User['role']>('All');
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState<Record<number, Record<string, boolean>>>({});
+  const [confirm, setConfirm] = useState<Omit<ConfirmModalProps, 'open'> | null>(null);
 
   const setOp = (userId: number, action: string, val: boolean) => {
     setActionLoading(prev => ({
@@ -45,7 +47,7 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(u =>
-        u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+        (u.name ?? '').toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q)
       );
     }
     if (roleFilter !== 'All') result = result.filter(u => u.role === roleFilter);
@@ -56,20 +58,70 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
   const clampedPage = Math.min(page, totalPages);
   const pageUsers = filtered.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
-  const handleRoleChange = async (userId: number, role: string) => {
+  const execRoleChange = async (userId: number, role: string) => {
     setOp(userId, 'role', true);
     try { await onRoleChange(userId, role); } finally { setOp(userId, 'role', false); }
   };
 
-  const handleRevoke = async (userId: number) => {
-    setOp(userId, 'revoke', true);
-    try { await onRevokeSession(userId); } finally { setOp(userId, 'revoke', false); }
+  const handleRoleChange = (user: User, role: string) => {
+    setConfirm({
+      title: 'Change Role',
+      description: (
+        <>
+          You are about to change the role of <strong>{user.email}</strong> from{' '}
+          <strong>{user.role}</strong> to <strong>{role}</strong>. This will immediately
+          update their permissions across the platform.
+        </>
+      ),
+      confirmLabel: 'Change Role',
+      cancelLabel: 'Cancel',
+      variant: 'warning',
+      onConfirm: () => { setConfirm(null); execRoleChange(user.id, role); },
+      onCancel: () => setConfirm(null),
+    });
   };
 
-  const handleDelete = async (userId: number) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
-    setOp(userId, 'delete', true);
-    try { await onDeleteUser(userId); } finally { setOp(userId, 'delete', false); }
+  const handleRevoke = (user: User) => {
+    setConfirm({
+      title: 'Revoke Session',
+      description: (
+        <>
+          You are about to revoke all active sessions for <strong>{user.email}</strong>.
+          They will be immediately signed out and will need to log in again to continue.
+        </>
+      ),
+      confirmLabel: 'Revoke Session',
+      cancelLabel: 'Cancel',
+      variant: 'warning',
+      onConfirm: async () => {
+        setConfirm(null);
+        setOp(user.id, 'revoke', true);
+        try { await onRevokeSession(user.id); } finally { setOp(user.id, 'revoke', false); }
+      },
+      onCancel: () => setConfirm(null),
+    });
+  };
+
+  const handleDelete = (user: User) => {
+    setConfirm({
+      title: 'Delete User',
+      description: (
+        <>
+          You are about to permanently delete <strong>{user.email}</strong>. This will
+          remove their account, all associated data, and revoke any active sessions.{' '}
+          <strong>This action cannot be undone.</strong>
+        </>
+      ),
+      confirmLabel: 'Delete User',
+      cancelLabel: 'Keep User',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirm(null);
+        setOp(user.id, 'delete', true);
+        try { await onDeleteUser(user.id); } finally { setOp(user.id, 'delete', false); }
+      },
+      onCancel: () => setConfirm(null),
+    });
   };
 
   return (
@@ -156,7 +208,7 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
                       </span>
                       <select
                         value={user.role}
-                        onChange={e => handleRoleChange(user.id, e.target.value)}
+                        onChange={e => handleRoleChange(user, e.target.value)}
                         disabled={isOp(user.id, 'role')}
                         aria-label={`Change role for ${user.name}`}
                         style={{
@@ -195,14 +247,14 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
                   <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <button
-                        onClick={() => handleRevoke(user.id)}
+                        onClick={() => handleRevoke(user)}
                         disabled={isOp(user.id, 'revoke')}
                         style={secondaryBtn(isOp(user.id, 'revoke'))}
                       >
                         {isOp(user.id, 'revoke') ? <><Spinner small color="#475467" /> Revoking…</> : 'Revoke'}
                       </button>
                       <button
-                        onClick={() => handleDelete(user.id)}
+                        onClick={() => handleDelete(user)}
                         disabled={isOp(user.id, 'delete')}
                         style={dangerBtn(isOp(user.id, 'delete'))}
                       >
@@ -216,6 +268,9 @@ export function UsersTable({ users, loading, onRoleChange, onRevokeSession, onDe
           </tbody>
         </table>
       </div>
+
+      {/* ── Confirm modal ── */}
+      {confirm && <ConfirmModal open {...confirm} />}
 
       {/* ── Pagination ── */}
       {!loading && filtered.length > 0 && (
