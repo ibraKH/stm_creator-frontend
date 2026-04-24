@@ -1,0 +1,377 @@
+/* ===== Global keyframes (not scoped by CSS Modules) ===== */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+@keyframes adminSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes toastSlideIn {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ===== Layout ===== */
+.layout {
+  display: flex;
+  height: 100vh;
+  background: #F0FAF4;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  color: #1A3C2E;
+  overflow: hidden;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #2D6A4F;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sidebarLogo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebarBrand {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebarTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebarSubtitle {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ===== Nav ===== */
+.nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.65);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease;
+  line-height: 1;
+}
+
+.navLink:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.navLinkActive {
+  background: #B8860B !important;
+  color: #fff !important;
+}
+
+.sidebarFooter {
+  padding: 10px 8px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.backLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.backLink:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* ===== Main content ===== */
+.main {
+  flex: 1;
+  margin-left: 220px;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 32px 36px;
+}
+
+/* ===== Mobile header ===== */
+.mobileHeader {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.hamburger {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #E0EDE6;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.hamburger span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: #1A3C2E;
+  border-radius: 2px;
+}
+
+.mobileTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1A3C2E;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 99;
+  display: none;
+}
+
+/* ===== Page header ===== */
+.pageHeader {
+  margin-bottom: 32px;
+}
+
+.pageTitle {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1A3C2E;
+  margin: 0 0 4px;
+}
+
+.pageSubtitle {
+  font-size: 14px;
+  color: #6B7280;
+  margin: 0;
+}
+
+/* ===== Sections ===== */
+.section {
+  margin-bottom: 40px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1A3C2E;
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #E0EDE6;
+}
+
+/* ===== Stats grid ===== */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+/* ===== Error / info banners ===== */
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 10px;
+  color: #DC2626;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.dismissBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #DC2626;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.dismissBtn:hover {
+  opacity: 1;
+}
+
+/* ===== Audit log ===== */
+.auditTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.auditTable th {
+  padding: 10px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #1A3C2E;
+  background: #F0FAF4;
+  border-bottom: 1px solid #E0EDE6;
+  white-space: nowrap;
+}
+
+.auditTable td {
+  padding: 10px 16px;
+  vertical-align: middle;
+}
+
+.auditRowEven td {
+  background: #fff;
+}
+
+.auditRowOdd td {
+  background: #F7FCF9;
+}
+
+.auditEmpty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6B7280;
+  font-size: 14px;
+}
+
+.auditLoading {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6B7280;
+  font-size: 14px;
+}
+
+/* ===== Toast notifications ===== */
+.toastContainer {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  animation: toastSlideIn 0.25s ease-out;
+  max-width: 320px;
+  pointer-events: all;
+}
+
+.toastSuccess {
+  background: #2D6A4F;
+  color: #fff;
+}
+
+.toastError {
+  background: #DC2626;
+  color: #fff;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+
+  .overlay {
+    display: block;
+  }
+
+  .main {
+    margin-left: 0;
+    padding: 16px 16px 32px;
+  }
+
+  .mobileHeader {
+    display: flex;
+  }
+
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+}
