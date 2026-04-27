@@ -138,10 +138,19 @@ export default function CustomEdge({
 
     // Get transition delta value for styling
     const transitionDelta = (data?.transitionDelta as number) ?? 0;
-    const isNegativeDelta = (transitionDelta as number) < 0;
+    const isNegativeDelta = transitionDelta < 0;
+    const isZeroDelta = transitionDelta === 0;
 
-    // Determine edge color based on transition delta
-    const edgeColor = isNegativeDelta ? '#ff5555' : '#55aa55';
+    // Determine edge color based on transition delta:
+    //   positive → green, negative → red, zero → gray
+    let edgeColor: string;
+    if (isZeroDelta) {
+        edgeColor = '#9ca3af';
+    } else if (isNegativeDelta) {
+        edgeColor = '#ff5555';
+    } else {
+        edgeColor = '#55aa55';
+    }
     const edgeWidth = Math.max(1, Math.abs(transitionDelta) * 5 + 1);
 
     // Adjust label positioning for better visibility
