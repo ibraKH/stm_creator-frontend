@@ -47,6 +47,7 @@ import {
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
 import AdminDashboard from './pages/AdminDashboard';
+import VerifyEmail from './pages/VerifyEmail';
 import ProtectedAdminRoute from './components/admin/ProtectedAdminRoute';
 
 import { Tour } from './extensions/onboarding/Tour';
@@ -342,10 +343,10 @@ function GraphEditor() {
 
     if (!result.valid) {
       window.alert(`State ID must be unique. Duplicate IDs: ${result.duplicates.join(', ')}`);
-      return;
+      throw new Error('Validation failed');
     }
 
-    await handleSaveModel();
+    return handleSaveModel();
   };
 
   const handleNodePatch = (field: string, value: unknown) => {
@@ -924,6 +925,7 @@ function App() {
         <Route path="/editor" element={<GraphEditor />} />
         <Route path="/home" element={<Home />} />
         <Route path="/login" element={<Navigate to="/editor" replace />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/notfound" element={<NotFound />} />
         <Route path="/admin" element={<ProtectedAdminRoute><AdminDashboard /></ProtectedAdminRoute>} />
         <Route path="*" element={<Navigate to="/notfound" replace />} />
