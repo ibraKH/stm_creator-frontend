@@ -1,4 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+    BIOMES,
+    BIOME_ORDER,
+    TEMPLATES_BY_ID,
+    listPrimaryGroupOptions,
+    listTemplatesForGroup,
+    makeTemplateRef,
+    primaryGroupKeyOf,
+    type BiomeType,
+    type TemplateRef,
+} from './templates';
 
 export interface NodeAttributes {
     stateName: string;
@@ -8,6 +19,7 @@ export interface NodeAttributes {
 	imageUrl?: string;
     note?: string;
     id?: string; // Optional for editing existing nodes
+    template?: TemplateRef; // Optional template selection from biome taxonomy
 }
 
 interface NodeModalProps {
@@ -44,6 +56,12 @@ export function NodeModal({ isOpen, onClose, onSave, onPatch, onDelete, initialV
     const [lowerBound, setLowerBound] = useState<string>('');
     const [upperBound, setUpperBound] = useState<string>('');
 
+    // Three-level template selection (all optional).
+    // Level 1: biome; Level 2: primary-group key; Level 3: concrete template id.
+    const [biome, setBiome] = useState<BiomeType | ''>('');
+    const [primaryGroupKey, setPrimaryGroupKey] = useState<string>('');
+    const [templateId, setTemplateId] = useState<string>('');
+
     // Update form when initialValues changes (when editing an existing node)
 	useEffect(() => {
         if (initialValues) {
@@ -60,6 +78,19 @@ export function NodeModal({ isOpen, onClose, onSave, onPatch, onDelete, initialV
                 setLowerBound('');
                 setUpperBound('');
             }
+
+            // Rehydrate template dropdowns from the stored ref, if any.
+            const storedRef = initialValues.template;
+            const storedTemplate = storedRef ? TEMPLATES_BY_ID[storedRef.id] : undefined;
+            if (storedTemplate) {
+                setBiome(storedTemplate.biome);
+                setPrimaryGroupKey(primaryGroupKeyOf(storedTemplate));
+                setTemplateId(storedTemplate.id);
+            } else {
+                setBiome('');
+                setPrimaryGroupKey('');
+                setTemplateId('');
+            }
 		} else {
             // Reset form when opening for a new node
             setAttributes({
@@ -72,8 +103,72 @@ export function NodeModal({ isOpen, onClose, onSave, onPatch, onDelete, initialV
             });
             setLowerBound('');
             setUpperBound('');
+            setBiome('');
+            setPrimaryGroupKey('');
+            setTemplateId('');
         }
     }, [initialValues, isOpen]);
+
+    // Options for the 2nd and 3rd dropdowns depend on the selections above.
+    const primaryGroupOptions = useMemo(
+        () => (biome ? listPrimaryGroupOptions(biome) : []),
+        [biome],
+    );
+    const templateOptions = useMemo(
+        () => (biome && primaryGroupKey ? listTemplatesForGroup(biome, primaryGroupKey) : []),
+        [biome, primaryGroupKey],
+    );
+
+    const handleBiomeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value as BiomeType | '';
+        setBiome(value);
+        setPrimaryGroupKey('');
+        setTemplateId('');
+        setAttributes((prev) => ({ ...prev, template: undefined }));
+        if (isEditing) {
+            onPatch?.('template', undefined);
+        }
+    };
+
+    const handlePrimaryGroupChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setPrimaryGroupKey(e.target.value);
+        setTemplateId('');
+        setAttributes((prev) => ({ ...prev, template: undefined }));
+        if (isEditing) {
+            onPatch?.('template', undefined);
+        }
+    };
+
+    const handleTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const id = e.target.value;
+        setTemplateId(id);
+        const t = TEMPLATES_BY_ID[id];
+        if (!t) {
+            setAttributes((prev) => ({ ...prev, template: undefined }));
+            if (isEditing) {
+                onPatch?.('template', undefined);
+            }
+            return;
+        }
+        const ref = makeTemplateRef(t);
+        setAttributes((prev) => {
+            // Pre-fill stateName only if the user has not typed anything yet,
+            // so we don't silently overwrite a value they entered earlier.
+            const shouldPrefillName = !prev.stateName || prev.stateName.trim() === '';
+            const next: NodeAttributes = {
+                ...prev,
+                template: ref,
+                stateName: shouldPrefillName ? t.label : prev.stateName,
+            };
+            if (isEditing && shouldPrefillName) {
+                onPatch?.('stateName', next.stateName);
+            }
+            return next;
+        });
+        if (isEditing) {
+            onPatch?.('template', ref);
+        }
+    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -136,6 +231,111 @@ export function NodeModal({ isOpen, onClose, onSave, onPatch, onDelete, initialV
                 <h2 style={{ marginTop: 0 }}>{isEditing ? 'Edit Node' : 'Add New Node'}</h2>
 
                 <form onSubmit={handleSubmit}>
+                    <div
+                        style={{
+                            marginBottom: '15px',
+                            padding: '10px',
+                            borderRadius: '6px',
+                            border: '1px solid #e5e7eb',
+                            backgroundColor: '#f9fafb',
+                        }}
+                    >
+                        <div style={{ fontWeight: 600, marginBottom: '8px' }}>
+                            Template <span style={{ color: '#6b7280', fontWeight: 400 }}>(optional)</span>
+                        </div>
+
+                        <label style={{ display: 'block', marginBottom: '8px' }}>
+                            <span style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>
+                                Biome
+                            </span>
+                            <select
+                                value={biome}
+                                onChange={handleBiomeChange}
+                                style={{
+                                    width: '100%',
+                                    padding: '8px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #ccc',
+                                    backgroundColor: 'white',
+                                }}
+                            >
+                                <option value="">Select a biome</option>
+                                {BIOME_ORDER.map((b) => (
+                                    <option key={b} value={b}>
+                                        {BIOMES[b].label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label style={{ display: 'block', marginBottom: '8px' }}>
+                            <span style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>
+                                Primary Layer
+                            </span>
+                            <select
+                                value={primaryGroupKey}
+                                onChange={handlePrimaryGroupChange}
+                                disabled={!biome}
+                                style={{
+                                    width: '100%',
+                                    padding: '8px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #ccc',
+                                    backgroundColor: biome ? 'white' : '#f3f4f6',
+                                }}
+                            >
+                                <option value="">
+                                    {biome ? 'Select a primary layer' : 'Select a biome first'}
+                                </option>
+                                {primaryGroupOptions.map((opt) => (
+                                    <option key={opt.key} value={opt.key}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label style={{ display: 'block' }}>
+                            <span style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>
+                                Template
+                            </span>
+                            <select
+                                value={templateId}
+                                onChange={handleTemplateChange}
+                                disabled={!primaryGroupKey}
+                                style={{
+                                    width: '100%',
+                                    padding: '8px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #ccc',
+                                    backgroundColor: primaryGroupKey ? 'white' : '#f3f4f6',
+                                }}
+                            >
+                                <option value="">
+                                    {primaryGroupKey ? 'Select a template' : 'Select a primary layer first'}
+                                </option>
+                                {templateOptions.map((t) => (
+                                    <option key={t.id} value={t.id}>
+                                        {t.shortLabel}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        {attributes.template && (
+                            <div
+                                style={{
+                                    marginTop: '8px',
+                                    fontSize: '12px',
+                                    color: '#374151',
+                                    fontStyle: 'italic',
+                                }}
+                            >
+                                Selected: {attributes.template.label}
+                            </div>
+                        )}
+                    </div>
+
                     <div style={{ marginBottom: '15px' }}>
                         <label style={{ display: 'block', marginBottom: '5px' }}>
                             State Name:
