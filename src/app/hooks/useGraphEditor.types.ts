@@ -50,6 +50,8 @@ export interface UseGraphEditorResult {
     handleSaveModel: () => Promise<SaveModelResponse>;
     handleDeleteState: (graphStateId: number) => void;
     handleDeleteModel: () => void;
+    openEditNode: (nodeId: string) => void;
+    openEditTransition: (transitionId: number) => void;
     handleReLayout: () => void;
     applyLayout?: (strategy: LayoutStrategy) => Promise<void> | void;
     toggleEdgeCreationMode: () => void;

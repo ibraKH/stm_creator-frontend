@@ -19,6 +19,10 @@ import { ErrorState } from './app/components/ErrorState';
 import { LoadingState } from './app/components/LoadingState';
 import { TipsPanel } from './app/components/TipsPanel';
 import { CommentPanel } from './app/components/CommentPanel';
+import {
+    CanvasContextMenu,
+    type CanvasContextMenuState,
+} from './app/components/CanvasContextMenu';
 import { MilestoneModal } from './app/components/MilestoneModal';
 import { ModelListModal } from './app/components/ModelListModal';
 import { HelpModal } from './app/components/HelpModal';
@@ -239,6 +243,8 @@ function GraphEditor() {
     handleSaveModel,
     handleDeleteState,
     handleDeleteModel,
+    openEditNode,
+    openEditTransition,
     handleReLayout,
     applyLayout,
     toggleEdgeCreationMode,
@@ -265,6 +271,86 @@ function GraphEditor() {
   });
 
   const modelName = bmrgData?.stm_name?.trim() || null;
+
+  // Right-click context menu state for canvas (state nodes & transition edges).
+  const [contextMenu, setContextMenu] =
+    useState<(CanvasContextMenuState & {
+      // Cached identifiers for the action handlers below — keeps the menu
+      // closure simple and avoids re-resolving on click.
+      readonly nodeId?: string;
+      readonly graphStateId?: number;
+      readonly transitionId?: number;
+    }) | null>(null);
+
+  const handleNodeContextMenu = (
+    event: React.MouseEvent,
+    node: { id: string },
+  ) => {
+    if (!baseCanEdit) return;
+    event.preventDefault();
+    const graphStateId = parseStateId(node.id);
+    if (graphStateId === null) return;
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      target: 'state',
+      nodeId: node.id,
+      graphStateId,
+    });
+  };
+
+  const handleEdgeContextMenu = (
+    event: React.MouseEvent,
+    edge: { id: string },
+  ) => {
+    if (!baseCanEdit) return;
+    event.preventDefault();
+    const match = /^transition-(\d+)$/.exec(edge.id);
+    if (!match) return;
+    const transitionId = parseInt(match[1], 10);
+    if (Number.isNaN(transitionId)) return;
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      target: 'transition',
+      transitionId,
+    });
+  };
+
+  const closeContextMenu = () => setContextMenu(null);
+
+  const handleContextMenuEdit = () => {
+    if (!contextMenu) return;
+    if (contextMenu.target === 'state' && contextMenu.nodeId) {
+      openEditNode(contextMenu.nodeId);
+    } else if (
+      contextMenu.target === 'transition' &&
+      typeof contextMenu.transitionId === 'number'
+    ) {
+      openEditTransition(contextMenu.transitionId);
+    }
+  };
+
+  const handleContextMenuDelete = () => {
+    if (!contextMenu) return;
+    if (
+      contextMenu.target === 'state' &&
+      typeof contextMenu.graphStateId === 'number'
+    ) {
+      handleDeleteState(contextMenu.graphStateId);
+    } else if (
+      contextMenu.target === 'transition' &&
+      typeof contextMenu.transitionId === 'number' &&
+      bmrgData
+    ) {
+      const transition = bmrgData.transitions.find(
+        (t) => t.transition_id === contextMenu.transitionId,
+      );
+      if (transition) {
+        handleDeleteTransition(transition);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!modelName) return;
@@ -778,6 +864,14 @@ function GraphEditor() {
             onConnect={onConnect}
             onEdgeClick={onEdgeClick}
             onEdgeDoubleClick={onEdgeDoubleClick}
+            onNodeContextMenu={handleNodeContextMenu}
+            onEdgeContextMenu={handleEdgeContextMenu}
+            onPaneContextMenu={(event) => {
+              // Right-clicking empty canvas dismisses the menu but otherwise
+              // keeps the browser's default suppressed for a consistent feel.
+              event.preventDefault();
+              closeContextMenu();
+            }}
             onNodeDragStart={handleNodeDragStart}
             onNodeDrag={handleNodeDrag}
             onNodeDragStop={handleNodeDragStop}
@@ -909,6 +1003,13 @@ function GraphEditor() {
 
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       <ModelListModal isOpen={isModelListOpen} onClose={() => setIsModelListOpen(false)} />
+
+      <CanvasContextMenu
+        menu={contextMenu}
+        onClose={closeContextMenu}
+        onEdit={handleContextMenuEdit}
+        onDelete={handleContextMenuDelete}
+      />
     </div>
   );
 }
