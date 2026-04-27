@@ -31,6 +31,7 @@ interface Dependencies {
     setIsNodeModalOpen: Dispatch<SetStateAction<boolean>>;
     getIsEditing: () => boolean;
     getCurrentNodeId: () => string | null;
+    getData: () => BMRGData | null;
     setData: Dispatch<SetStateAction<BMRGData | null>>;
     handleNodeLabelChange: (nodeId: string, label: string) => void;
     requestNodeEdit?: (nodeId: string) => Promise<boolean>;
@@ -50,6 +51,7 @@ export function createNodeHandlers({
     setIsNodeModalOpen,
     getIsEditing,
     getCurrentNodeId,
+    getData,
     setData,
     handleNodeLabelChange,
     requestNodeEdit,
@@ -113,16 +115,30 @@ export function createNodeHandlers({
                 return updateBmrgStateName(prev, stateId, attributes);
             });
         } else {
+            // Use the same numeric id for BOTH the React Flow node (`state-N`)
+            // and the BMRG state's frontend_state_id, so parseStateId() can
+            // recover the BMRG state from the React Flow edge endpoints. This
+            // is required for transition creation/editing to work for newly
+            // added nodes.
+            const data = getData();
+            if (!data) {
+                return;
+            }
+            const nextStateId = nextFrontendStateId(data.states);
+
             setNodes((prev) => [
                 ...prev,
-                createCustomNode(attributes, handleNodeLabelChange, handleNodeClick),
+                createCustomNode(
+                    attributes,
+                    nextStateId,
+                    handleNodeLabelChange,
+                    handleNodeClick,
+                ),
             ]);
             setData((prev) => {
                 if (!prev) {
                     return prev;
                 }
-
-                const nextStateId = nextFrontendStateId(prev.states);
                 const newState = buildStateFromAttributes(attributes, nextStateId);
                 return addStateToBmrg(prev, newState);
             });

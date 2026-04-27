@@ -90,6 +90,7 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
         setIsNodeModalOpen: state.setIsNodeModalOpen,
         getIsEditing: () => state.isEditing,
         getCurrentNodeId: () => state.currentNodeId,
+        getData: () => state.bmrgData,
         setData: state.setBmrgData,
         handleNodeLabelChange,
         requestNodeEdit: options.requestNodeEdit,
