@@ -164,6 +164,7 @@ export function applyNodePatch(nodes: AppNode[], nodeId: string, field: string, 
 
 export function createCustomNode(
     attributes: NodeAttributes,
+    stateId: number,
     onLabelChange: (id: string, label: string) => void,
     onNodeClick: (id: string) => void,
 ): AppNode {
@@ -178,11 +179,16 @@ export function createCustomNode(
             condition: attributes.condition,
             imageUrl: attributes.imageUrl,
             note: attributes.note,
+            template: attributes.template,
         },
     };
 
     return {
-        id: `node-${Date.now()}`,
+        // Use the BMRG frontend_state_id as the React Flow node id so it stays
+        // in sync with transitionsToEdges() and parseStateId() (both expect
+        // the `state-N` prefix). Using a timestamp here would orphan the node
+        // from the BMRG state and silently break edge creation/editing.
+        id: `state-${stateId}`,
         type: 'custom',
         data: nodeData,
         position: {

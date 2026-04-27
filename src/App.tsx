@@ -19,6 +19,10 @@ import { ErrorState } from './app/components/ErrorState';
 import { LoadingState } from './app/components/LoadingState';
 import { TipsPanel } from './app/components/TipsPanel';
 import { CommentPanel } from './app/components/CommentPanel';
+import {
+    CanvasContextMenu,
+    type CanvasContextMenuState,
+} from './app/components/CanvasContextMenu';
 import { MilestoneModal } from './app/components/MilestoneModal';
 import { ModelListModal } from './app/components/ModelListModal';
 import { HelpModal } from './app/components/HelpModal';
@@ -76,6 +80,25 @@ function GraphEditor() {
   const [isModelListOpen, setIsModelListOpen] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(true);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  // Sidebar legend collapse/expand state. Persisted in localStorage so the
+  // user's choice sticks across sessions; defaults to expanded.
+  const [legendCollapsed, setLegendCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('stmCreator.legendCollapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'stmCreator.legendCollapsed',
+        legendCollapsed ? '1' : '0',
+      );
+    } catch {
+      // ignore quota / private-mode failures — the toggle still works
+    }
+  }, [legendCollapsed]);
   const [commentsVersion, setCommentsVersion] = useState(0);
 
   const [auth, setAuth] = useState<{ token: string; user: AuthUser } | null>(() => {
@@ -239,6 +262,8 @@ function GraphEditor() {
     handleSaveModel,
     handleDeleteState,
     handleDeleteModel,
+    openEditNode,
+    openEditTransition,
     handleReLayout,
     applyLayout,
     toggleEdgeCreationMode,
@@ -265,6 +290,86 @@ function GraphEditor() {
   });
 
   const modelName = bmrgData?.stm_name?.trim() || null;
+
+  // Right-click context menu state for canvas (state nodes & transition edges).
+  const [contextMenu, setContextMenu] =
+    useState<(CanvasContextMenuState & {
+      // Cached identifiers for the action handlers below — keeps the menu
+      // closure simple and avoids re-resolving on click.
+      readonly nodeId?: string;
+      readonly graphStateId?: number;
+      readonly transitionId?: number;
+    }) | null>(null);
+
+  const handleNodeContextMenu = (
+    event: React.MouseEvent,
+    node: { id: string },
+  ) => {
+    if (!baseCanEdit) return;
+    event.preventDefault();
+    const graphStateId = parseStateId(node.id);
+    if (graphStateId === null) return;
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      target: 'state',
+      nodeId: node.id,
+      graphStateId,
+    });
+  };
+
+  const handleEdgeContextMenu = (
+    event: React.MouseEvent,
+    edge: { id: string },
+  ) => {
+    if (!baseCanEdit) return;
+    event.preventDefault();
+    const match = /^transition-(\d+)$/.exec(edge.id);
+    if (!match) return;
+    const transitionId = parseInt(match[1], 10);
+    if (Number.isNaN(transitionId)) return;
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      target: 'transition',
+      transitionId,
+    });
+  };
+
+  const closeContextMenu = () => setContextMenu(null);
+
+  const handleContextMenuEdit = () => {
+    if (!contextMenu) return;
+    if (contextMenu.target === 'state' && contextMenu.nodeId) {
+      openEditNode(contextMenu.nodeId);
+    } else if (
+      contextMenu.target === 'transition' &&
+      typeof contextMenu.transitionId === 'number'
+    ) {
+      openEditTransition(contextMenu.transitionId);
+    }
+  };
+
+  const handleContextMenuDelete = () => {
+    if (!contextMenu) return;
+    if (
+      contextMenu.target === 'state' &&
+      typeof contextMenu.graphStateId === 'number'
+    ) {
+      handleDeleteState(contextMenu.graphStateId);
+    } else if (
+      contextMenu.target === 'transition' &&
+      typeof contextMenu.transitionId === 'number' &&
+      bmrgData
+    ) {
+      const transition = bmrgData.transitions.find(
+        (t) => t.transition_id === contextMenu.transitionId,
+      );
+      if (transition) {
+        handleDeleteTransition(transition);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!modelName) return;
@@ -585,13 +690,16 @@ function GraphEditor() {
     }
   }
 
+  // Swatch colours mirror the rendered node colours from customNode.css
+  // (.class-color-1 .. .class-color-6). Keep these in sync if those change
+  // — the legend is meant to be a faithful preview of the canvas.
   const legendItems = [
-    { cls: 'Class I', label: 'Reference', bg: '#dcfce7', border: '#86efac' },
-    { cls: 'Class II', label: 'Class II', bg: '#ecfccb', border: '#bef264' },
-    { cls: 'Class III', label: 'Class III', bg: '#fef9c3', border: '#fde047' },
-    { cls: 'Class IV', label: 'Class IV', bg: '#fef3c7', border: '#fcd34d' },
-    { cls: 'Class V', label: 'Class V', bg: '#ffedd5', border: '#fdba74' },
-    { cls: 'Class VI', label: 'Class VI', bg: '#fee2e2', border: '#fca5a5' },
+    { cls: 'Class I', label: 'Reference', bg: '#f0fdf4', border: '#bbf7d0' },
+    { cls: 'Class II', label: 'Class II', bg: '#f7fee7', border: '#d9f99d' },
+    { cls: 'Class III', label: 'Class III', bg: '#fefce8', border: '#fef08a' },
+    { cls: 'Class IV', label: 'Class IV', bg: '#fffbeb', border: '#fde68a' },
+    { cls: 'Class V', label: 'Class V', bg: '#fff7ed', border: '#fed7aa' },
+    { cls: 'Class VI', label: 'Class VI', bg: '#fef2f2', border: '#fecaca' },
   ];
 
   const handleCanvasMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -735,17 +843,42 @@ function GraphEditor() {
       <div className="workspace">
         <div className="sidebar">
           <div className="sidebar-section">
-            <div className="sidebar-label">Classes</div>
-            {legendItems.map((item) => (
-              <div className="legend-item" key={item.cls}>
-                <div
-                  className="legend-swatch"
-                  style={{ background: item.bg, border: `1px solid ${item.border}` }}
-                />
-                <span className="legend-text">{item.label}</span>
-                <span className="legend-count">{classCountMap[item.cls] || 0}</span>
+            <button
+              type="button"
+              className="sidebar-label legend-toggle"
+              onClick={() => setLegendCollapsed((v) => !v)}
+              aria-expanded={!legendCollapsed}
+              aria-controls="legend-list"
+              title={legendCollapsed ? 'Expand legend' : 'Collapse legend'}
+            >
+              <span
+                className="legend-toggle-arrow"
+                aria-hidden="true"
+                style={{
+                  display: 'inline-block',
+                  marginRight: 6,
+                  transform: legendCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                  transition: 'transform .15s ease',
+                }}
+              >
+                ▾
+              </span>
+              Condition classes
+            </button>
+            {!legendCollapsed && (
+              <div id="legend-list">
+                {legendItems.map((item) => (
+                  <div className="legend-item" key={item.cls}>
+                    <div
+                      className="legend-swatch"
+                      style={{ background: item.bg, border: `1px solid ${item.border}` }}
+                    />
+                    <span className="legend-text">{item.label}</span>
+                    <span className="legend-count">{classCountMap[item.cls] || 0}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
 
           <div className="sidebar-divider" />
@@ -778,6 +911,14 @@ function GraphEditor() {
             onConnect={onConnect}
             onEdgeClick={onEdgeClick}
             onEdgeDoubleClick={onEdgeDoubleClick}
+            onNodeContextMenu={handleNodeContextMenu}
+            onEdgeContextMenu={handleEdgeContextMenu}
+            onPaneContextMenu={(event) => {
+              // Right-clicking empty canvas dismisses the menu but otherwise
+              // keeps the browser's default suppressed for a consistent feel.
+              event.preventDefault();
+              closeContextMenu();
+            }}
             onNodeDragStart={handleNodeDragStart}
             onNodeDrag={handleNodeDrag}
             onNodeDragStop={handleNodeDragStop}
@@ -909,6 +1050,13 @@ function GraphEditor() {
 
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       <ModelListModal isOpen={isModelListOpen} onClose={() => setIsModelListOpen(false)} />
+
+      <CanvasContextMenu
+        menu={contextMenu}
+        onClose={closeContextMenu}
+        onEdit={handleContextMenuEdit}
+        onDelete={handleContextMenuDelete}
+      />
     </div>
   );
 }
