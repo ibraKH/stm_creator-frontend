@@ -32,8 +32,10 @@ interface NodeModalProps {
     readonly isEditing: boolean;
 }
 
-// VAST classes from the JSON data
-const VAST_CLASSES = [
+// Condition classes from the JSON data.
+// (Backing data field is still vastClass to avoid a schema migration —
+// see issue #56 for the full rename plan.)
+const CONDITION_CLASSES = [
     "Class I",
     "Class II",
     "Class III",
@@ -375,7 +377,7 @@ export function NodeModal({ isOpen, onClose, onSave, onPatch, onDelete, initialV
 
                     <div style={{ marginBottom: '15px' }}>
                         <label style={{ display: 'block', marginBottom: '5px' }}>
-                            VAST Class:
+                            Condition class:
                             <select
                                 name="vastClass"
                                 value={attributes.vastClass}
@@ -388,9 +390,9 @@ export function NodeModal({ isOpen, onClose, onSave, onPatch, onDelete, initialV
                                 }}
                             >
                                 <option value="">Select a class</option>
-                                {VAST_CLASSES.map(vastClass => (
-                                    <option key={vastClass} value={vastClass}>
-                                        {vastClass}
+                                {CONDITION_CLASSES.map(conditionClass => (
+                                    <option key={conditionClass} value={conditionClass}>
+                                        {conditionClass}
                                     </option>
                                 ))}
                             </select>

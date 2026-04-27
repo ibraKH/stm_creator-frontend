@@ -821,7 +821,7 @@ function GraphEditor() {
       <div className="workspace">
         <div className="sidebar">
           <div className="sidebar-section">
-            <div className="sidebar-label">Classes</div>
+            <div className="sidebar-label">Condition classes</div>
             {legendItems.map((item) => (
               <div className="legend-item" key={item.cls}>
                 <div
