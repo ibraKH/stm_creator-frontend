@@ -241,6 +241,23 @@
   margin-bottom: 10px;
 }
 
+/* When the sidebar-label is interactive (legend collapse toggle), strip
+   default button chrome but keep the same typographic styling. */
+button.sidebar-label.legend-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+button.sidebar-label.legend-toggle:hover {
+  color: var(--text-muted);
+}
+
 .sidebar-divider {
   height: 1px;
   background: var(--border);
