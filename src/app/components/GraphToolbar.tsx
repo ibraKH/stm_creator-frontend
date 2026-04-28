@@ -15,6 +15,7 @@ interface GraphToolbarProps {
   readonly onDeleteModel?: () => void;
   /** Opens the unified Milestone modal (save + history) */
   readonly onOpenMilestone: () => void;
+  readonly onOpenVersionCompare?: () => void;
   readonly onImportEKS: (file: File) => void | Promise<void>;
   readonly onExportEKS: () => void;
   readonly onRelayout: () => void;
@@ -50,6 +51,7 @@ export function GraphToolbar({
   onRelayout,
   onApplyLayout,
   onOpenMilestone,
+  onOpenVersionCompare,
   onImportEKS,
   onExportEKS,
   onToggleSelfTransitions,
@@ -139,6 +141,12 @@ export function GraphToolbar({
       <button data-tour="milestone" onClick={onOpenMilestone} className="tb-btn">
         Milestone
       </button>
+
+      {onOpenVersionCompare && (
+        <button data-tour="compare-versions" onClick={onOpenVersionCompare} className="tb-btn">
+          Compare
+        </button>
+      )}
 
       <div className="tb-sep" />
 

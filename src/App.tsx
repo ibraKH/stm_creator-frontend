@@ -26,9 +26,10 @@ import {
 import { MilestoneModal } from './app/components/MilestoneModal';
 import { ModelListModal } from './app/components/ModelListModal';
 import { HelpModal } from './app/components/HelpModal';
+import { VersionComparisonModal } from './app/components/VersionComparisonModal';
 import { useGraphEditor } from './app/hooks/useGraphEditor';
 import { NodeModal } from './nodes/nodeModal';
-import { TransitionModal } from './transitions/transitionModal';
+import { TransitionModal, type Driver } from './transitions/transitionModal';
 
 import { TransitionFilterPanel } from './extensions/TransitionFilterPanel';
 import './extensions/extensions.css';
@@ -78,6 +79,7 @@ type RemoteCursorState = Record<
 function GraphEditor() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isModelListOpen, setIsModelListOpen] = useState(false);
+  const [isVersionComparisonOpen, setIsVersionComparisonOpen] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(true);
   const [commentsOpen, setCommentsOpen] = useState(false);
   // Sidebar legend collapse/expand state. Persisted in localStorage so the
@@ -256,6 +258,7 @@ function GraphEditor() {
     onEdgeDoubleClick,
     handleEdgesChange,
     handleSaveNode,
+    handleDuplicateState,
     applyRemoteNodePatch,
     handleSaveTransition,
     handleDeleteTransition,
@@ -381,46 +384,92 @@ function GraphEditor() {
     return () => window.clearInterval(timer);
   }, [modelName]);
 
-  const commentCountMap = useMemo(() => {
-    if (!modelName) return {} as Record<string, number>;
+  const commentStats = useMemo(() => {
+    const empty = {
+      nodeCounts: {} as Record<string, number>,
+      edgeCounts: {} as Record<string, number>,
+    };
+    if (!modelName) return empty;
 
     try {
       const raw = localStorage.getItem(`stmCreator.comments.${modelName}`);
       const comments = raw ? JSON.parse(raw) : [];
-      const counts: Record<string, number> = {};
+      const openComments = Array.isArray(comments)
+        ? comments.filter((comment: any) => typeof comment?.text === 'string' && !comment?.resolved)
+        : [];
+      const nodeCounts: Record<string, number> = {};
+      const edgeCounts: Record<string, number> = {};
 
       nodesWithCallbacks.forEach((node) => {
         const label = ((node.data as any)?.label || '').trim();
         if (!label) return;
-
         const mentionToken = `@[${label}]`;
-
-        const count = comments.filter((comment: any) =>
-          typeof comment?.text === 'string' &&
-          !comment?.resolved &&
+        nodeCounts[node.id] = openComments.filter((comment: any) =>
           comment.text.includes(mentionToken)
         ).length;
-
-        counts[node.id] = count;
       });
 
-      return counts;
+      edges.forEach((edge) => {
+        const srcNode = nodesWithCallbacks.find((node) => node.id === edge.source);
+        const tgtNode = nodesWithCallbacks.find((node) => node.id === edge.target);
+        const sourceLabel = ((srcNode?.data as any)?.label || edge.source).trim();
+        const targetLabel = ((tgtNode?.data as any)?.label || edge.target).trim();
+        const mentionToken = `@[${sourceLabel} -> ${targetLabel}]`;
+        edgeCounts[edge.id] = openComments.filter((comment: any) =>
+          comment.text.includes(mentionToken)
+        ).length;
+      });
+
+      return { nodeCounts, edgeCounts };
     } catch {
-      return {} as Record<string, number>;
+      return empty;
     }
-  }, [modelName, nodesWithCallbacks, commentsVersion]);
+  }, [modelName, nodesWithCallbacks, edges, commentsVersion]);
 
   const nodesForRender = nodesWithCallbacks.map((node) => ({
     ...node,
     data: {
       ...node.data,
-      commentCount: commentCountMap[node.id] ?? 0,
+      commentCount: commentStats.nodeCounts[node.id] ?? 0,
       onCommentBubbleClick: () => {
         setCommentsOpen(true);
         setTipsOpen(false);
       },
     },
   }));
+
+  const edgesForRender = edges.map((edge) => ({
+    ...edge,
+    data: {
+      ...edge.data,
+      commentCount: commentStats.edgeCounts[edge.id] ?? 0,
+      onCommentBubbleClick: () => {
+        setCommentsOpen(true);
+        setTipsOpen(false);
+      },
+    },
+  }));
+
+  const driverOptions = useMemo<Driver[]>(() => {
+    const drivers = bmrgData?.transitions.flatMap((transition) =>
+      (transition.causal_chain ?? []).flatMap((part: any) =>
+        Array.isArray(part?.drivers) ? part.drivers : [],
+      ),
+    ) ?? [];
+
+    const seen = new Set<string>();
+    return drivers.filter((driver: any): driver is Driver => {
+      if (!driver || typeof driver.driver !== 'string' || typeof driver.driver_group !== 'string') {
+        return false;
+      }
+      const key = `${driver.driver_group}:::${driver.driver}`.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [bmrgData]);
 
   // ---- Save validation: state id must be unique ----
   const validateUniqueStateIds = () => {
@@ -447,10 +496,10 @@ function GraphEditor() {
 
     if (!result.valid) {
       window.alert(`State ID must be unique. Duplicate IDs: ${result.duplicates.join(', ')}`);
-      return;
+      throw new Error('Duplicate state IDs.');
     }
 
-    await handleSaveModel();
+    return await handleSaveModel();
   };
 
   const handleNodePatch = (field: string, value: unknown) => {
@@ -753,6 +802,7 @@ function GraphEditor() {
           onExportEKS={exportToEKS}
           onRelayout={handleReLayout}
           onToggleSelfTransitions={toggleSelfTransitions}
+          onOpenVersionCompare={() => setIsVersionComparisonOpen(true)}
           edgeCreationMode={edgeCreationMode}
           isSaving={isSaving}
           showSelfTransitions={showSelfTransitions}
@@ -904,7 +954,7 @@ function GraphEditor() {
         >
           <ReactFlow
             nodes={nodesForRender}
-            edges={edges}
+            edges={edgesForRender}
             nodeTypes={nodeTypes}
             edgeTypes={customEdgeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
@@ -1027,6 +1077,12 @@ function GraphEditor() {
           }
           releaseActiveNodeLock(modelName);
         }}
+        onDuplicate={() => {
+          if (initialNodeValues?.id) {
+            handleDuplicateState(initialNodeValues.id);
+          }
+          releaseActiveNodeLock(modelName);
+        }}
         initialValues={initialNodeValues}
         isEditing={isEditing}
       />
@@ -1038,6 +1094,7 @@ function GraphEditor() {
         onDelete={handleDeleteTransition}
         transition={currentTransition}
         stateNames={stateNameMap}
+        driverOptions={driverOptions}
       />
 
       <MilestoneModal
@@ -1051,6 +1108,12 @@ function GraphEditor() {
       />
 
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      <VersionComparisonModal
+        isOpen={isVersionComparisonOpen}
+        versions={versions}
+        currentData={bmrgData}
+        onClose={() => setIsVersionComparisonOpen(false)}
+      />
       <ModelListModal isOpen={isModelListOpen} onClose={() => setIsModelListOpen(false)} />
 
       <CanvasContextMenu

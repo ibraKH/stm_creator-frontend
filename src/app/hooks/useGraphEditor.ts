@@ -243,6 +243,12 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
             }
             nodeHandlers.handleSaveNode(attributes);
         },
+        handleDuplicateState: (nodeId) => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            nodeHandlers.handleDuplicateState(nodeId);
+        },
         applyRemoteNodePatch,
         handleSaveTransition,
         handleDeleteTransition: (transition) => {

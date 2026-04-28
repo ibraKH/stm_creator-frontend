@@ -59,7 +59,7 @@ export function CommentPanel({ onClose, nodes, edges, userEmail, modelName }: Co
     // Build the mention list from nodes and edges
     const mentionItems: MentionItem[] = [
         ...nodes.map(n => ({ type: 'node' as const, id: n.id, label: n.label })),
-        ...edges.map(e => ({ type: 'edge' as const, id: e.id, label: `${e.sourceLabel} → ${e.targetLabel}` })),
+        ...edges.map(e => ({ type: 'edge' as const, id: e.id, label: `${e.sourceLabel} -> ${e.targetLabel}` })),
     ];
 
     const filteredMentions = mentionItems.filter(m =>
@@ -190,7 +190,7 @@ export function CommentPanel({ onClose, nodes, edges, userEmail, modelName }: Co
                                 handleSubmit();
                             }
                         }}
-                        placeholder="Write a comment… Use @ to mention nodes/edges"
+                        placeholder="Write a comment. Use @ to mention nodes/edges"
                         style={textareaStyle}
                         rows={3}
                     />

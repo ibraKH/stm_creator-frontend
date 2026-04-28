@@ -44,6 +44,7 @@ export interface UseGraphEditorResult {
     onEdgeDoubleClick: EdgeMouseHandler;
     handleEdgesChange: (changes: EdgeChange[]) => void;
     handleSaveNode: (attributes: NodeAttributes) => void;
+    handleDuplicateState: (nodeId: string) => void;
     applyRemoteNodePatch: (nodeId: string, graphStateId: number, field: string, value: unknown) => void;
     handleSaveTransition: (transition: TransitionData) => void;
     handleDeleteTransition: (transition: TransitionData) => void;

@@ -47,6 +47,37 @@
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
+.edge-comment-foreignobject {
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.edge-comment-bubble {
+    pointer-events: auto;
+    min-width: 34px;
+    height: 22px;
+    padding: 0 8px;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.edge-comment-bubble:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+}
+
 /* Positive delta styles */
 .delta-positive {
     background: #e8f5e9;
