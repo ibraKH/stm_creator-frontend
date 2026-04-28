@@ -142,11 +142,15 @@ export function GraphToolbar({
         Milestone
       </button>
 
-      {onOpenVersionCompare && (
-        <button data-tour="compare-versions" onClick={onOpenVersionCompare} className="tb-btn">
-          Compare
-        </button>
-      )}
+      <button
+        data-tour="compare-versions"
+        onClick={onOpenVersionCompare}
+        className="tb-btn compare"
+        disabled={!onOpenVersionCompare}
+        title="Compare milestones"
+      >
+        Compare
+      </button>
 
       <div className="tb-sep" />
 
