@@ -396,7 +396,9 @@ function GraphEditor() {
         const mentionToken = `@[${label}]`;
 
         const count = comments.filter((comment: any) =>
-          typeof comment?.text === 'string' && comment.text.includes(mentionToken)
+          typeof comment?.text === 'string' &&
+          !comment?.resolved &&
+          comment.text.includes(mentionToken)
         ).length;
 
         counts[node.id] = count;
