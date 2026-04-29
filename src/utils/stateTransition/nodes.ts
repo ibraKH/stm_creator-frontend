@@ -14,14 +14,27 @@ function getConditionString(state: StateData): string {
 
 function stateToNodeAttributes(state: StateData): NodeAttributes {
     const id = getGraphStateId(state);
+    const imageUrls = normaliseImageUrls(state.attributes);
     return {
         stateName: state.state_name,
         stateNumber: id.toString(),
         vastClass: state.vast_state.vast_class,
         condition: getConditionString(state),
-        imageUrl: state.attributes?.imageUrl ?? '',
+        imageUrl: imageUrls[0] ?? '',
+        imageUrls,
         note: state.attributes?.note ?? '',
+        template: state.attributes?.template,
     };
+}
+
+function normaliseImageUrls(attributes: any): string[] {
+    if (!attributes) {
+        return [];
+    }
+    if (Array.isArray(attributes.imageUrls)) {
+        return attributes.imageUrls.filter((url: unknown): url is string => typeof url === 'string' && url.trim() !== '');
+    }
+    return typeof attributes.imageUrl === 'string' && attributes.imageUrl.trim() !== '' ? [attributes.imageUrl] : [];
 }
 
 function getStoredPosition(state: StateData): { x: number; y: number } | null {

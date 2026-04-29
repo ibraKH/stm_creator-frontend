@@ -6,6 +6,9 @@ export interface CommentEntry {
     text: string;
     author: string;
     createdAt: string;
+    resolved?: boolean;
+    resolvedAt?: string;
+    resolvedBy?: string;
 }
 
 /** An @-mentionable item (node or edge) */
@@ -45,6 +48,7 @@ export function CommentPanel({ onClose, nodes, edges, userEmail, modelName }: Co
     const [showMentions, setShowMentions] = useState(false);
     const [mentionFilter, setMentionFilter] = useState('');
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const [showResolved, setShowResolved] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Reload comments when model changes
@@ -55,7 +59,7 @@ export function CommentPanel({ onClose, nodes, edges, userEmail, modelName }: Co
     // Build the mention list from nodes and edges
     const mentionItems: MentionItem[] = [
         ...nodes.map(n => ({ type: 'node' as const, id: n.id, label: n.label })),
-        ...edges.map(e => ({ type: 'edge' as const, id: e.id, label: `${e.sourceLabel} → ${e.targetLabel}` })),
+        ...edges.map(e => ({ type: 'edge' as const, id: e.id, label: `${e.sourceLabel} -> ${e.targetLabel}` })),
     ];
 
     const filteredMentions = mentionItems.filter(m =>
@@ -104,6 +108,7 @@ export function CommentPanel({ onClose, nodes, edges, userEmail, modelName }: Co
             text: text.trim(),
             author: userEmail || 'Guest',
             createdAt: new Date().toISOString(),
+            resolved: false,
         };
         const next = [entry, ...comments];
         setComments(next);
@@ -111,13 +116,48 @@ export function CommentPanel({ onClose, nodes, edges, userEmail, modelName }: Co
         setText('');
     };
 
+    const updateComments = (next: CommentEntry[]) => {
+        setComments(next);
+        saveComments(modelName, next);
+    };
+
+    const resolveComment = (commentId: string) => {
+        const next = comments.map(c =>
+            c.id === commentId
+                ? {
+                    ...c,
+                    resolved: true,
+                    resolvedAt: new Date().toISOString(),
+                    resolvedBy: userEmail || 'Guest',
+                }
+                : c
+        );
+        updateComments(next);
+    };
+
+    const reopenComment = (commentId: string) => {
+        const next = comments.map(c =>
+            c.id === commentId
+                ? {
+                    ...c,
+                    resolved: false,
+                    resolvedAt: undefined,
+                    resolvedBy: undefined,
+                }
+                : c
+        );
+        updateComments(next);
+    };
+
     const confirmDelete = () => {
         if (!pendingDeleteId) return;
         const next = comments.filter(c => c.id !== pendingDeleteId);
-        setComments(next);
-        saveComments(modelName, next);
+        updateComments(next);
         setPendingDeleteId(null);
     };
+
+    const unresolvedComments = comments.filter(c => !c.resolved);
+    const resolvedComments = comments.filter(c => c.resolved);
 
     /** Render comment text with @[...] mentions highlighted */
     const renderText = (raw: string) => {
@@ -150,7 +190,7 @@ export function CommentPanel({ onClose, nodes, edges, userEmail, modelName }: Co
                                 handleSubmit();
                             }
                         }}
-                        placeholder="Write a comment… Use @ to mention nodes/edges"
+                        placeholder="Write a comment. Use @ to mention nodes/edges"
                         style={textareaStyle}
                         rows={3}
                     />
@@ -189,21 +229,73 @@ export function CommentPanel({ onClose, nodes, edges, userEmail, modelName }: Co
                 {comments.length === 0 ? (
                     <p style={emptyText}>No comments yet.</p>
                 ) : (
-                    comments.map(c => (
-                        <div key={c.id} style={commentCard}>
-                            <div style={commentHeader}>
-                                <span style={authorStyle}>{c.author}</span>
-                                <span style={dateStyle}>{new Date(c.createdAt).toLocaleString()}</span>
+                    <>
+                        {unresolvedComments.length === 0 ? (
+                            <p style={emptyText}>No open comments.</p>
+                        ) : (
+                            unresolvedComments.map(c => (
+                                <div key={c.id} style={commentCard}>
+                                    <div style={commentHeader}>
+                                        <span style={authorStyle}>{c.author}</span>
+                                        <span style={dateStyle}>{new Date(c.createdAt).toLocaleString()}</span>
+                                    </div>
+                                    <div style={commentText}>{renderText(c.text)}</div>
+                                    <div style={commentActions}>
+                                        <button
+                                            onClick={() => resolveComment(c.id)}
+                                            style={resolveBtnStyle}
+                                        >
+                                            Resolve
+                                        </button>
+                                        <button
+                                            onClick={() => setPendingDeleteId(c.id)}
+                                            style={deleteBtnStyle}
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+
+                        {resolvedComments.length > 0 && (
+                            <div style={resolvedSection}>
+                                <button
+                                    onClick={() => setShowResolved(prev => !prev)}
+                                    style={resolvedToggleStyle}
+                                >
+                                    {showResolved ? 'Hide' : 'Show'} resolved comments ({resolvedComments.length})
+                                </button>
+
+                                {showResolved && resolvedComments.map(c => (
+                                    <div key={c.id} style={resolvedCommentCard}>
+                                        <div style={commentHeader}>
+                                            <span style={authorStyle}>{c.author}</span>
+                                            <span style={dateStyle}>{new Date(c.createdAt).toLocaleString()}</span>
+                                        </div>
+                                        <div style={resolvedMetaText}>
+                                            Resolved{c.resolvedBy ? ` by ${c.resolvedBy}` : ''}{c.resolvedAt ? ` at ${new Date(c.resolvedAt).toLocaleString()}` : ''}
+                                        </div>
+                                        <div style={commentText}>{renderText(c.text)}</div>
+                                        <div style={commentActions}>
+                                            <button
+                                                onClick={() => reopenComment(c.id)}
+                                                style={reopenBtnStyle}
+                                            >
+                                                Reopen
+                                            </button>
+                                            <button
+                                                onClick={() => setPendingDeleteId(c.id)}
+                                                style={deleteBtnStyle}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                            <div style={commentText}>{renderText(c.text)}</div>
-                            <button
-                                onClick={() => setPendingDeleteId(c.id)}
-                                style={deleteBtnStyle}
-                            >
-                                Delete
-                            </button>
-                        </div>
-                    ))
+                        )}
+                    </>
                 )}
             </div>
 
@@ -353,6 +445,63 @@ const mentionHighlight: React.CSSProperties = {
     background: 'rgba(16, 185, 129, 0.1)',
     borderRadius: 3,
     padding: '0 2px',
+};
+
+const commentActions: React.CSSProperties = {
+    display: 'flex',
+    gap: 10,
+    alignItems: 'center',
+};
+
+const resolveBtnStyle: React.CSSProperties = {
+    background: 'none',
+    border: 'none',
+    color: '#059669',
+    fontSize: 11,
+    cursor: 'pointer',
+    padding: 0,
+    fontWeight: 600,
+};
+
+const reopenBtnStyle: React.CSSProperties = {
+    background: 'none',
+    border: 'none',
+    color: '#2563eb',
+    fontSize: 11,
+    cursor: 'pointer',
+    padding: 0,
+    fontWeight: 600,
+};
+
+const resolvedSection: React.CSSProperties = {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTop: '1px solid var(--border, #e5e7eb)',
+};
+
+const resolvedToggleStyle: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--surface2, #f9fafb)',
+    border: '1px solid var(--border, #e5e7eb)',
+    borderRadius: 6,
+    padding: '6px 8px',
+    fontSize: 12,
+    color: 'var(--text, #064e3b)',
+    cursor: 'pointer',
+    marginBottom: 8,
+    textAlign: 'left',
+};
+
+const resolvedCommentCard: React.CSSProperties = {
+    ...commentCard,
+    opacity: 0.72,
+    background: '#f3f4f6',
+};
+
+const resolvedMetaText: React.CSSProperties = {
+    fontSize: 10,
+    color: 'var(--text-muted, #6b7280)',
+    marginBottom: 6,
 };
 
 const deleteBtnStyle: React.CSSProperties = {

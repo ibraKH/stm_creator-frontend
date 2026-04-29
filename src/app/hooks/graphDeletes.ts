@@ -30,13 +30,20 @@ export function createDeleteActions({ getData, setData, setNodes, rebuildEdges, 
       removeTransitionLocal(tId as any);
       return;
     }
+    if (!confirm(`Delete transition ${tId}? This cannot be undone.`)) return;
+
+    // Optimistically remove from local state first so the canvas updates
+    // immediately, even when the transition was never saved to the backend
+    // (in which case the API DELETE would 404). The next Save Model will
+    // reconcile any out-of-band differences.
+    removeTransitionLocal(tId);
+
     try {
-      if (!confirm(`Delete transition ${tId}? This cannot be undone.`)) return;
       await apiDeleteTransition(data.stm_name, tId);
-      removeTransitionLocal(tId);
-      alert('Transition deleted');
     } catch (e) {
-      alert((e as Error).message || 'Failed to delete transition');
+      // Don't roll back — the local removal is the user's intent. Surface
+      // non-trivial errors to the console for debugging.
+      console.warn('Backend delete for transition failed (kept local removal):', tId, e);
     }
   };
 
@@ -47,25 +54,28 @@ export function createDeleteActions({ getData, setData, setNodes, rebuildEdges, 
     const st = data.states.find(s => (s.state_id ?? s.frontend_state_id) === graphStateId);
     if (!st) return;
     const dbId = st.state_id;
-    try {
-      if (!confirm(`Delete state "${st.state_name}" and its related transitions?`)) return;
-      if (typeof dbId === 'number') {
+    if (!confirm(`Delete state "${st.state_name}" and its related transitions?`)) return;
+
+    // Optimistically remove locally first (state + connected transitions +
+    // recompute nodes/edges). The next Save Model will reconcile any
+    // out-of-band differences if the backend call fails.
+    setData(prev => {
+      if (!prev) return prev;
+      const remainingStates = prev.states.filter(s => (s.state_id ?? s.frontend_state_id) !== graphStateId);
+      const remainingTransitions = prev.transitions.filter(t => t.start_state_id !== graphStateId && t.end_state_id !== graphStateId);
+      const next: BMRGData = { ...prev, states: remainingStates, transitions: remainingTransitions };
+      const nodes = statesToNodes(next.states, handleNodeLabelChange, handleNodeClick, next.transitions);
+      setNodes(nodes);
+      rebuildEdges({ transitions: remainingTransitions, dataOverride: next });
+      return next;
+    });
+
+    if (typeof dbId === 'number') {
+      try {
         await apiDeleteState(data.stm_name, dbId);
+      } catch (e) {
+        console.warn('Backend delete for state failed (kept local removal):', dbId, e);
       }
-      // local removal of state and any transitions using it
-      setData(prev => {
-        if (!prev) return prev;
-        const remainingStates = prev.states.filter(s => (s.state_id ?? s.frontend_state_id) !== graphStateId);
-        const remainingTransitions = prev.transitions.filter(t => t.start_state_id !== graphStateId && t.end_state_id !== graphStateId);
-        const next: BMRGData = { ...prev, states: remainingStates, transitions: remainingTransitions };
-        const nodes = statesToNodes(next.states, handleNodeLabelChange, handleNodeClick, next.transitions);
-        setNodes(nodes);
-        rebuildEdges({ transitions: remainingTransitions, dataOverride: next });
-        return next;
-      });
-      alert('State deleted');
-    } catch (e) {
-      alert((e as Error).message || 'Failed to delete state');
     }
   };
 

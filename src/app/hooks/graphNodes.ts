@@ -15,7 +15,7 @@ import {
     updateBmrgStateName,
     updateNodeLabel,
 } from './graphMutations';
-import { nextFrontendStateId, parseStateId } from './graph-utils';
+import { findStateByGraphId, nextFrontendStateId, parseStateId } from './graph-utils';
 
 interface Dependencies {
     getNodes: () => AppNode[];
@@ -31,6 +31,7 @@ interface Dependencies {
     setIsNodeModalOpen: Dispatch<SetStateAction<boolean>>;
     getIsEditing: () => boolean;
     getCurrentNodeId: () => string | null;
+    getData: () => BMRGData | null;
     setData: Dispatch<SetStateAction<BMRGData | null>>;
     handleNodeLabelChange: (nodeId: string, label: string) => void;
     requestNodeEdit?: (nodeId: string) => Promise<boolean>;
@@ -50,6 +51,7 @@ export function createNodeHandlers({
     setIsNodeModalOpen,
     getIsEditing,
     getCurrentNodeId,
+    getData,
     setData,
     handleNodeLabelChange,
     requestNodeEdit,
@@ -113,21 +115,100 @@ export function createNodeHandlers({
                 return updateBmrgStateName(prev, stateId, attributes);
             });
         } else {
+            // Use the same numeric id for BOTH the React Flow node (`state-N`)
+            // and the BMRG state's frontend_state_id, so parseStateId() can
+            // recover the BMRG state from the React Flow edge endpoints. This
+            // is required for transition creation/editing to work for newly
+            // added nodes.
+            const data = getData();
+            if (!data) {
+                return;
+            }
+            const nextStateId = nextFrontendStateId(data.states);
+
             setNodes((prev) => [
                 ...prev,
-                createCustomNode(attributes, handleNodeLabelChange, handleNodeClick),
+                createCustomNode(
+                    attributes,
+                    nextStateId,
+                    handleNodeLabelChange,
+                    handleNodeClick,
+                ),
             ]);
             setData((prev) => {
                 if (!prev) {
                     return prev;
                 }
-
-                const nextStateId = nextFrontendStateId(prev.states);
                 const newState = buildStateFromAttributes(attributes, nextStateId);
                 return addStateToBmrg(prev, newState);
             });
         }
 
+        setIsNodeModalOpen(false);
+    };
+
+    const handleDuplicateState = (nodeId: string) => {
+        const data = getData();
+        const graphStateId = parseStateId(nodeId);
+        if (!data || graphStateId === null) {
+            return;
+        }
+
+        const sourceState = findStateByGraphId(data.states, graphStateId);
+        const sourceNode = getNodes().find((node) => node.id === nodeId);
+        if (!sourceState || !sourceNode) {
+            return;
+        }
+
+        const nextStateId = nextFrontendStateId(data.states);
+        const nextName = uniqueCopyName(
+            sourceState.state_name || 'State',
+            data.states.map((state) => state.state_name),
+        );
+        const nextPosition = {
+            x: sourceNode.position.x + 48,
+            y: sourceNode.position.y + 48,
+        };
+        const copiedAttributes = cloneValue(sourceState.attributes ?? {}) as Record<string, unknown>;
+        copiedAttributes.position = nextPosition;
+
+        const duplicatedState = cloneValue(sourceState) as BMRGData['states'][number];
+        delete duplicatedState.state_id;
+        duplicatedState.frontend_state_id = nextStateId;
+        duplicatedState.state_name = nextName;
+        duplicatedState.attributes = copiedAttributes;
+
+        const imageUrls = normaliseStateImageUrls(copiedAttributes);
+        const attributes: NodeAttributes = {
+            stateName: nextName,
+            stateNumber: String(nextStateId),
+            vastClass: sourceState.vast_state?.vast_class ?? '',
+            condition: getConditionString(sourceState),
+            imageUrl: imageUrls[0] ?? '',
+            imageUrls,
+            note: typeof copiedAttributes.note === 'string' ? copiedAttributes.note : '',
+            template: copiedAttributes.template as NodeAttributes['template'],
+        };
+
+        setData((prev) => {
+            if (!prev) {
+                return prev;
+            }
+            return addStateToBmrg(prev, duplicatedState);
+        });
+        setNodes((prev) => [
+            ...prev,
+            createCustomNode(
+                attributes,
+                nextStateId,
+                handleNodeLabelChange,
+                handleNodeClick,
+                nextPosition,
+            ),
+        ]);
+        setCurrentNodeId(null);
+        setInitialNodeValues(undefined);
+        setIsEditing(false);
         setIsNodeModalOpen(false);
     };
 
@@ -156,8 +237,41 @@ export function createNodeHandlers({
         handleNodeClick,
         handleNodeLabelChange: handleNodeLabelChangeInternal,
         handleSaveNode,
+        handleDuplicateState,
         toggleEdgeCreationMode,
         openAddNodeModal,
         closeNodeModal,
     };
+}
+
+function getConditionString(state: BMRGData['states'][number]): string {
+    if (state.condition_upper === -9999 || state.condition_lower === -9999) {
+        return 'No condition data';
+    }
+    return `Condition range: ${state.condition_lower.toFixed(2)} - ${state.condition_upper.toFixed(2)}`;
+}
+
+function uniqueCopyName(baseName: string, existingNames: string[]): string {
+    const baseCopyName = `${baseName} Copy`;
+    const existing = new Set(existingNames);
+    if (!existing.has(baseCopyName)) {
+        return baseCopyName;
+    }
+
+    let index = 2;
+    while (existing.has(`${baseCopyName} ${index}`)) {
+        index += 1;
+    }
+    return `${baseCopyName} ${index}`;
+}
+
+function normaliseStateImageUrls(attributes: Record<string, unknown>): string[] {
+    if (Array.isArray(attributes.imageUrls)) {
+        return attributes.imageUrls.filter((url): url is string => typeof url === 'string' && url.trim() !== '');
+    }
+    return typeof attributes.imageUrl === 'string' && attributes.imageUrl.trim() !== '' ? [attributes.imageUrl] : [];
+}
+
+function cloneValue<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T;
 }

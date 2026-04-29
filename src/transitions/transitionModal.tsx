@@ -1,6 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TransitionData } from '../utils/stateTransition';
 import './transitionModal.css';
+
+export interface Driver {
+    driver: string;
+    driver_group: string;
+}
+
+interface ChainPart {
+    chain_part: string;
+    drivers: Driver[];
+}
 
 interface TransitionModalProps {
     isOpen: boolean;
@@ -8,116 +18,202 @@ interface TransitionModalProps {
     onSave: (transitionData: TransitionData) => void;
     onDelete?: (transitionData: TransitionData) => void;
     transition: TransitionData | null;
-    stateNames: Record<number, string>; // Map state IDs to names for display
+    stateNames: Record<number, string>;
+    driverOptions?: Driver[];
 }
 
-// Interface for Driver data
-interface Driver {
-    driver: string;
-    driver_group: string;
-}
-
-// Interface for Chain Part
-interface ChainPart {
-    chain_part: string;
-    drivers: Driver[];
-}
-
-// Predefined driver options (TBD: replace with real options when available)
-const PREDEFINED_DRIVERS: Driver[] = [
+const DEFAULT_DRIVER_OPTIONS: Driver[] = [
     { driver_group: 'Climate', driver: 'Increased temperature' },
     { driver_group: 'Climate', driver: 'Decreased rainfall' },
     { driver_group: 'Disturbance', driver: 'Fire frequency increase' },
+    { driver_group: 'Disturbance', driver: 'Severe fire event' },
     { driver_group: 'Biotic', driver: 'Invasive species pressure' },
+    { driver_group: 'Management', driver: 'Grazing pressure change' },
+    { driver_group: 'Hydrology', driver: 'Changed inundation regime' },
 ];
 
-// Editable causal chain component with add/remove interactions
+const CHAIN_PART_OPTIONS = [
+    'trigger',
+    'disturbance',
+    'pressure',
+    'management response',
+    'ecosystem response',
+];
+
+function uniqueDrivers(drivers: Driver[]): Driver[] {
+    const seen = new Set<string>();
+    return drivers.filter((driver) => {
+        const key = `${driver.driver_group}:::${driver.driver}`.toLowerCase();
+        if (seen.has(key)) {
+            return false;
+        }
+        seen.add(key);
+        return true;
+    });
+}
+
+function fuzzyScore(query: string, label: string): number {
+    const q = query.trim().toLowerCase();
+    const value = label.toLowerCase();
+    if (!q) {
+        return 1;
+    }
+    if (value.includes(q)) {
+        return 100 - value.indexOf(q);
+    }
+
+    let cursor = 0;
+    let score = 0;
+    for (const char of q) {
+        const found = value.indexOf(char, cursor);
+        if (found === -1) {
+            return 0;
+        }
+        score += 3;
+        cursor = found + 1;
+    }
+    return score;
+}
+
+function driverLabel(driver: Driver): string {
+    return `${driver.driver_group} - ${driver.driver}`;
+}
+
+function parseCustomDriver(raw: string): Driver | null {
+    const value = raw.trim();
+    if (!value) {
+        return null;
+    }
+    const [group, ...rest] = value.includes(':') ? value.split(':') : ['Custom', value];
+    const name = rest.join(':').trim();
+    return name ? { driver_group: group.trim() || 'Custom', driver: name } : null;
+}
+
 const CausalChainEditor = ({
     causalChain,
+    driverOptions,
     onRemoveDriver,
     onAddDriver,
+    onAddChainPart,
 }: {
     causalChain: ChainPart[];
+    driverOptions: Driver[];
     onRemoveDriver: (partIndex: number, driver: Driver) => void;
     onAddDriver: (partIndex: number, driver: Driver) => void;
+    onAddChainPart: (name: string) => void;
 }) => {
+    const [searchByPart, setSearchByPart] = useState<Record<number, string>>({});
+    const [newChainPart, setNewChainPart] = useState(CHAIN_PART_OPTIONS[0]);
     const totalDrivers = causalChain.reduce((count, part) => count + part.drivers.length, 0);
 
-    if (!causalChain || causalChain.length === 0) {
-        return (
-            <div className="empty-causal-chain">
-                <p className="empty-causal-chain-message">No causal chain defined. Add drivers under a chain part.</p>
-            </div>
+    const getSuggestions = (partIndex: number, query: string): Driver[] => {
+        const existing = new Set(
+            (causalChain[partIndex]?.drivers ?? []).map((driver) => driverLabel(driver).toLowerCase()),
         );
-    }
+        return driverOptions
+            .map((driver) => ({ driver, score: fuzzyScore(query, driverLabel(driver)) }))
+            .filter(({ driver, score }) => score > 0 && !existing.has(driverLabel(driver).toLowerCase()))
+            .sort((a, b) => b.score - a.score || driverLabel(a.driver).localeCompare(driverLabel(b.driver)))
+            .slice(0, 6)
+            .map(({ driver }) => driver);
+    };
 
     return (
         <div className="causal-chain-container">
-            <h4 className="causal-chain-title">Causal Chain Drivers:</h4>
+            <div className="causal-chain-heading">
+                <h4 className="causal-chain-title">Causal Chain Drivers</h4>
+                <div className="add-chain-part">
+                    <select
+                        value={newChainPart}
+                        onChange={(event) => setNewChainPart(event.target.value)}
+                        className="add-chain-part-select"
+                    >
+                        {CHAIN_PART_OPTIONS.map((part) => (
+                            <option key={part} value={part}>{part}</option>
+                        ))}
+                    </select>
+                    <button
+                        type="button"
+                        className="btn btn-small btn-primary"
+                        onClick={() => onAddChainPart(newChainPart)}
+                    >
+                        Add Part
+                    </button>
+                </div>
+            </div>
+
+            {causalChain.length === 0 && (
+                <div className="empty-causal-chain">
+                    <p className="empty-causal-chain-message">No causal chain defined. Add a chain part first.</p>
+                </div>
+            )}
 
             {causalChain.map((chainPart, index) => {
                 if (!chainPart.chain_part) return null;
-
-                // Local UI state per part for selected driver to add
-                const selectId = `add-driver-select-${index}`;
-
-                // Group drivers by driver_group for display
                 const groupedDrivers = chainPart.drivers.reduce((groups, driver) => {
-                    const group = driver.driver_group;
-                    if (!groups[group]) {
-                        groups[group] = [] as Driver[];
-                    }
-                    groups[group].push(driver);
+                    const group = driver.driver_group || 'Custom';
+                    groups[group] = groups[group] ? [...groups[group], driver] : [driver];
                     return groups;
                 }, {} as Record<string, Driver[]>);
+                const query = searchByPart[index] ?? '';
+                const suggestions = getSuggestions(index, query);
+                const customDriver = parseCustomDriver(query);
 
                 return (
-                    <div key={index} className="chain-part">
+                    <div key={`${chainPart.chain_part}-${index}`} className="chain-part">
                         <div className="chain-part-header">
                             <span>{chainPart.chain_part}</span>
-                            <div className="chain-part-actions">
-                                <span className="chain-part-counter">{chainPart.drivers.length}</span>
-                                <div className="add-driver-inline">
-                                    <select
-                                        id={selectId}
-                                        className="add-driver-select"
-                                        defaultValue=""
-                                        aria-label="Select a driver to add"
-                                    >
-                                        <option value="" disabled>Add Driver…</option>
-                                        {PREDEFINED_DRIVERS.map((opt, i) => (
-                                            <option key={i} value={`${opt.driver_group}|||${opt.driver}`}>
-                                                {opt.driver_group} — {opt.driver}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        type="button"
-                                        className="btn btn-small btn-primary add-driver-btn"
-                                        onClick={() => {
-                                            const select = document.getElementById(selectId) as HTMLSelectElement | null;
-                                            if (!select || !select.value) return;
-                                            const [group, name] = select.value.split('|||');
-                                            onAddDriver(index, { driver_group: group, driver: name });
-                                            select.value = '';
-                                        }}
-                                    >
-                                        Add
-                                    </button>
-                                </div>
-                            </div>
+                            <span className="chain-part-counter">{chainPart.drivers.length}</span>
                         </div>
 
                         <div className="chain-part-content">
-                            {Object.entries(groupedDrivers).map(([groupName, drivers], groupIndex) => (
-                                <div key={groupIndex} className="driver-group">
-                                    <div className={`driver-group-content ${groupIndex < Object.keys(groupedDrivers).length - 1 ? 'with-border' : ''}`}>
-                                        <div className="driver-group-name">
-                                            {groupName}
-                                        </div>
+                            <div className="driver-search-row">
+                                <input
+                                    value={query}
+                                    onChange={(event) => setSearchByPart((prev) => ({ ...prev, [index]: event.target.value }))}
+                                    placeholder="Search or type Group: driver"
+                                    className="driver-search-input"
+                                />
+                                <button
+                                    type="button"
+                                    className="btn btn-small btn-primary"
+                                    onClick={() => {
+                                        const driver = suggestions[0] ?? customDriver;
+                                        if (!driver) return;
+                                        onAddDriver(index, driver);
+                                        setSearchByPart((prev) => ({ ...prev, [index]: '' }));
+                                    }}
+                                >
+                                    Add
+                                </button>
+                            </div>
+
+                            {query && suggestions.length > 0 && (
+                                <div className="driver-suggestions">
+                                    {suggestions.map((driver) => (
+                                        <button
+                                            key={driverLabel(driver)}
+                                            type="button"
+                                            className="driver-suggestion"
+                                            onClick={() => {
+                                                onAddDriver(index, driver);
+                                                setSearchByPart((prev) => ({ ...prev, [index]: '' }));
+                                            }}
+                                        >
+                                            <span>{driver.driver}</span>
+                                            <small>{driver.driver_group}</small>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {Object.entries(groupedDrivers).map(([groupName, drivers]) => (
+                                <div key={groupName} className="driver-group">
+                                    <div className="driver-group-content">
+                                        <div className="driver-group-name">{groupName}</div>
                                         <ul className="driver-list">
-                                            {drivers.map((driver, driverIndex) => (
-                                                <li key={driverIndex} className="driver-item">
+                                            {drivers.map((driver) => (
+                                                <li key={driverLabel(driver)} className="driver-item">
                                                     <span className="driver-name">{driver.driver}</span>
                                                     <button
                                                         type="button"
@@ -126,7 +222,7 @@ const CausalChainEditor = ({
                                                         title="Remove"
                                                         onClick={() => onRemoveDriver(index, driver)}
                                                     >
-                                                        ×
+                                                        x
                                                     </button>
                                                 </li>
                                             ))}
@@ -134,8 +230,9 @@ const CausalChainEditor = ({
                                     </div>
                                 </div>
                             ))}
+
                             {chainPart.drivers.length === 0 && (
-                                <div className="empty-causal-chain">
+                                <div className="empty-causal-chain inline">
                                     <p className="empty-causal-chain-message">No drivers in this chain part.</p>
                                 </div>
                             )}
@@ -144,7 +241,7 @@ const CausalChainEditor = ({
                 );
             })}
 
-            {totalDrivers === 0 && (
+            {totalDrivers === 0 && causalChain.length > 0 && (
                 <div className="empty-causal-chain">
                     <p className="empty-causal-chain-message">No causal chain drivers available for this transition.</p>
                 </div>
@@ -153,18 +250,30 @@ const CausalChainEditor = ({
     );
 };
 
-export function TransitionModal({ isOpen, onClose, onSave, onDelete, transition, stateNames }: TransitionModalProps) {
+export function TransitionModal({
+    isOpen,
+    onClose,
+    onSave,
+    onDelete,
+    transition,
+    stateNames,
+    driverOptions = [],
+}: TransitionModalProps) {
     const [transitionData, setTransitionData] = useState<TransitionData | null>(null);
     const [activeTab, setActiveTab] = useState<'basic' | 'causal-chain'>('basic');
+    const mergedDriverOptions = useMemo(
+        () => uniqueDrivers([...driverOptions, ...DEFAULT_DRIVER_OPTIONS]),
+        [driverOptions],
+    );
 
-    // Update form when transition changes
     useEffect(() => {
         if (transition) {
-            setTransitionData({...transition});
+            setTransitionData({ ...transition });
+            setActiveTab('basic');
         }
     }, [transition]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (!transitionData) return;
 
         const { name, value } = e.target;
@@ -172,13 +281,7 @@ export function TransitionModal({ isOpen, onClose, onSave, onDelete, transition,
             ? parseFloat(value)
             : value;
 
-        setTransitionData(prev => {
-            if (!prev) return null;
-            return {
-                ...prev,
-                [name]: numericValue
-            };
-        });
+        setTransitionData((prev) => prev ? { ...prev, [name]: numericValue } : null);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -188,22 +291,17 @@ export function TransitionModal({ isOpen, onClose, onSave, onDelete, transition,
         }
     };
 
-    if (!isOpen || !transitionData) return null;
-
-    // Count total drivers for badge display
-    const totalDrivers = transitionData.causal_chain
-        ? transitionData.causal_chain.reduce((count, part) => count + part.drivers.length, 0)
-        : 0;
-
     const handleRemoveDriver = (partIndex: number, driverToRemove: Driver) => {
         setTransitionData((prev) => {
             if (!prev) return prev;
-            const nextChain = (prev.causal_chain ?? []).map((p, idx) => {
-                if (idx !== partIndex) return p;
-                const driverIndex = p.drivers.indexOf(driverToRemove);
-                if (driverIndex === -1) return p;
-                const nextDrivers = [...p.drivers.slice(0, driverIndex), ...p.drivers.slice(driverIndex + 1)];
-                return { ...p, drivers: nextDrivers } as ChainPart;
+            const nextChain = ((prev.causal_chain ?? []) as ChainPart[]).map((part, index) => {
+                if (index !== partIndex) return part;
+                return {
+                    ...part,
+                    drivers: part.drivers.filter(
+                        (driver) => driver.driver !== driverToRemove.driver || driver.driver_group !== driverToRemove.driver_group,
+                    ),
+                };
             });
             return { ...prev, causal_chain: nextChain };
         });
@@ -212,46 +310,58 @@ export function TransitionModal({ isOpen, onClose, onSave, onDelete, transition,
     const handleAddDriver = (partIndex: number, driverToAdd: Driver) => {
         setTransitionData((prev) => {
             if (!prev) return prev;
-            const nextChain = (prev.causal_chain ?? []).map((p, idx) => {
-                if (idx !== partIndex) return p;
-                // Avoid duplicates of exact same driver object
-                const exists = p.drivers.some(
-                    (d: Driver) => d.driver === driverToAdd.driver && d.driver_group === driverToAdd.driver_group,
+            const nextChain = ((prev.causal_chain ?? []) as ChainPart[]).map((part, index) => {
+                if (index !== partIndex) return part;
+                const exists = part.drivers.some(
+                    (driver) => driver.driver === driverToAdd.driver && driver.driver_group === driverToAdd.driver_group,
                 );
-                const nextDrivers = exists ? p.drivers : [...p.drivers, driverToAdd];
-                return { ...p, drivers: nextDrivers } as ChainPart;
+                return exists ? part : { ...part, drivers: [...part.drivers, driverToAdd] };
             });
             return { ...prev, causal_chain: nextChain };
         });
     };
 
+    const handleAddChainPart = (name: string) => {
+        setTransitionData((prev) => {
+            if (!prev) return prev;
+            const nextChain = [
+                ...((prev.causal_chain ?? []) as ChainPart[]),
+                { chain_part: name, drivers: [] },
+            ];
+            return { ...prev, causal_chain: nextChain };
+        });
+    };
+
+    if (!isOpen || !transitionData) return null;
+
+    const causalChain = (transitionData.causal_chain ?? []) as ChainPart[];
+    const totalDrivers = causalChain.reduce((count, part) => count + part.drivers.length, 0);
+
     return (
         <div className="transition-modal-overlay">
-                <div className="transition-modal-container">
-                    <h2 className="transition-modal-header">
-                        <span>Edit Transition</span>
-                        <div className={`transition-delta ${transitionData.transition_delta < 0 ? 'negative' : 'positive'}`}>
-                            Δ {transitionData.transition_delta.toFixed(2)}
-                        </div>
-                    </h2>
-                    {onDelete && (
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8 }}>
+            <div className="transition-modal-container">
+                <h2 className="transition-modal-header">
+                    <span>Edit Transition</span>
+                    <div className={`transition-delta ${transitionData.transition_delta < 0 ? 'negative' : 'positive'}`}>
+                        Delta {transitionData.transition_delta.toFixed(2)}
+                    </div>
+                </h2>
+
+                {onDelete && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8 }}>
                         <button
-                          className="btn btn-small btn-danger"
-                          type="button"
-                          onClick={() => onDelete(transitionData)}
-                          aria-label="Delete transition"
+                            className="btn btn-small btn-danger"
+                            type="button"
+                            onClick={() => onDelete(transitionData)}
+                            aria-label="Delete transition"
                         >
-                          🗑 Delete Transition
+                            Delete Transition
                         </button>
-                      </div>
-                    )}
+                    </div>
+                )}
 
                 <div className="transition-info">
-                    <div className="transition-id">
-                        Transition ID: {transitionData.transition_id}
-                    </div>
-
+                    <div className="transition-id">Transition ID: {transitionData.transition_id}</div>
                     <div className={`transition-status ${transitionData.time_25 === 1 ? 'plausible' : 'implausible'}`}>
                         {transitionData.time_25 === 1 ? 'Plausible' : 'Implausible'}
                     </div>
@@ -262,30 +372,29 @@ export function TransitionModal({ isOpen, onClose, onSave, onDelete, transition,
                         <div className="state-name">{stateNames[transitionData.start_state_id]}</div>
                         <div className="state-id">State ID: {transitionData.start_state_id}</div>
                     </div>
-                    <div className="state-arrow">→</div>
+                    <div className="state-arrow">-&gt;</div>
                     <div className="state-info">
                         <div className="state-name">{stateNames[transitionData.end_state_id]}</div>
                         <div className="state-id">State ID: {transitionData.end_state_id}</div>
                     </div>
                 </div>
 
-                {/* Tab Navigation */}
                 <div className="tab-navigation">
-                    <div
+                    <button
+                        type="button"
                         onClick={() => setActiveTab('basic')}
                         className={`tab ${activeTab === 'basic' ? 'active' : ''}`}
                     >
                         Basic Info
-                    </div>
-                    <div
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => setActiveTab('causal-chain')}
                         className={`tab ${activeTab === 'causal-chain' ? 'active' : ''}`}
                     >
                         Causal Chain
-                        {totalDrivers > 0 && (
-                            <span className="tab-counter">{totalDrivers}</span>
-                        )}
-                    </div>
+                        {totalDrivers > 0 && <span className="tab-counter">{totalDrivers}</span>}
+                    </button>
                 </div>
 
                 <form onSubmit={handleSubmit}>
@@ -335,7 +444,7 @@ export function TransitionModal({ isOpen, onClose, onSave, onDelete, transition,
                                         className="form-input"
                                     />
                                     <small className="form-hint">
-                                        Change in condition (negative values shown in red, positive in green)
+                                        Change in condition. Negative values render red, positive values render green.
                                     </small>
                                 </label>
                             </div>
@@ -345,7 +454,7 @@ export function TransitionModal({ isOpen, onClose, onSave, onDelete, transition,
                                     Notes:
                                     <textarea
                                         name="notes"
-                                        value={transitionData.notes}
+                                        value={transitionData.notes ?? ''}
                                         onChange={handleChange}
                                         className="form-textarea"
                                     />
@@ -354,24 +463,19 @@ export function TransitionModal({ isOpen, onClose, onSave, onDelete, transition,
                         </>
                     ) : (
                         <CausalChainEditor
-                            causalChain={transitionData.causal_chain || []}
+                            causalChain={causalChain}
+                            driverOptions={mergedDriverOptions}
                             onRemoveDriver={handleRemoveDriver}
                             onAddDriver={handleAddDriver}
+                            onAddChainPart={handleAddChainPart}
                         />
                     )}
 
                     <div className="form-buttons">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="btn btn-secondary"
-                        >
+                        <button type="button" onClick={onClose} className="btn btn-secondary">
                             Cancel
                         </button>
-                        <button
-                            type="submit"
-                            className="btn btn-primary"
-                        >
+                        <button type="submit" className="btn btn-primary">
                             Update
                         </button>
                     </div>
