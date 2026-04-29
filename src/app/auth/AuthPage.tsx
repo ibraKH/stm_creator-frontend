@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { login, signup, authStorage, type AuthResponse } from './api';
+import { login, signup, resendVerification, authStorage, ApiError, type AuthResponse } from './api';
 import { ModelSelectionModal } from '../components/ModelSelectionModal';
 
 type Props = {
@@ -61,14 +61,14 @@ export default function AuthPage({ onAuthenticated, onContinueGuest, onModelSele
         {mode === 'login' ? (
           <LoginForm onAuthenticated={handleAuthenticated} />
         ) : (
-          <SignupForm onAuthenticated={handleAuthenticated} />
+          <SignupForm />
         )}
         <div style={divider}><span style={dividerLine} /> or <span style={dividerLine} /></div>
         <button style={ghostBtn} onClick={onContinueGuest}>
           Continue as Guest
         </button>
       </div>
-      
+
       <ModelSelectionModal
         isOpen={showModelSelection}
         onClose={handleCloseModelSelection}
@@ -83,21 +83,35 @@ function LoginForm({ onAuthenticated }: { readonly onAuthenticated: (auth: AuthR
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isUnverified, setIsUnverified] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsUnverified(false);
+    setResendStatus('idle');
     setLoading(true);
     try {
       const auth = await login(email, password);
       authStorage.save(auth);
       onAuthenticated(auth);
     } catch (err) {
-      setError((err as Error).message || 'Login failed');
+      if (err instanceof ApiError && err.code === 'AUTH_UNVERIFIED') {
+        setIsUnverified(true);
+      } else {
+        setError((err as Error).message || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleResend = async () => {
+    setResendStatus('sending');
+    await resendVerification(email);
+    setResendStatus('sent');
   };
 
   return (
@@ -107,33 +121,67 @@ function LoginForm({ onAuthenticated }: { readonly onAuthenticated: (auth: AuthR
       <label htmlFor="login-password" style={label}>Password</label>
       <input id="login-password" style={input} type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
       {error && <div style={errorBox}>{error}</div>}
+      {isUnverified && (
+        <div style={infoBox}>
+          <p style={{ margin: '0 0 8px' }}>Please verify your email before logging in.</p>
+          {resendStatus === 'sent' ? (
+            <p style={{ margin: 0, fontSize: 13, color: '#065f46' }}>
+              If that address is registered, a new link is on its way.
+            </p>
+          ) : (
+            <button
+              type="button"
+              style={secondaryBtn}
+              disabled={resendStatus === 'sending'}
+              onClick={handleResend}
+            >
+              {resendStatus === 'sending' ? 'Sending…' : 'Resend verification email'}
+            </button>
+          )}
+        </div>
+      )}
       <button style={primaryBtn} disabled={loading} type="submit">{loading ? 'Logging in…' : 'Login'}</button>
     </form>
   );
 }
 
-function SignupForm({ onAuthenticated }: { readonly onAuthenticated: (auth: AuthResponse) => void }) {
+function SignupForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<string>('Viewer');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const auth = await signup(name, email, password, role);
-      authStorage.save(auth);
-      onAuthenticated(auth);
+      await signup(name, email, password, role);
+      setSentTo(email);
     } catch (err) {
-      setError((err as Error).message || 'Signup failed');
+      if (err instanceof ApiError && err.code === 'RESOURCE_CONFLICT') {
+        setError('This email is already in use.');
+      } else {
+        setError((err as Error).message || 'Signup failed');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  if (sentTo) {
+    return (
+      <div style={infoBox}>
+        <p style={{ margin: '0 0 4px', fontWeight: 600 }}>Check your inbox</p>
+        <p style={{ margin: 0, fontSize: 14 }}>
+          We sent a verification link to <strong>{sentTo}</strong>. Check your inbox.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={onSubmit}>
@@ -271,6 +319,17 @@ const primaryBtn: React.CSSProperties = {
   fontWeight: 600,
 };
 
+const secondaryBtn: React.CSSProperties = {
+  padding: '7px 12px',
+  background: '#ffffff',
+  color: '#065f46',
+  border: '1px solid #bbf7d0',
+  borderRadius: 8,
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 500,
+};
+
 const errorBox: React.CSSProperties = {
   marginTop: 10,
   padding: 10,
@@ -278,6 +337,16 @@ const errorBox: React.CSSProperties = {
   color: '#7f1d1d',
   borderRadius: 6,
   border: '1px solid #ef4444',
+};
+
+const infoBox: React.CSSProperties = {
+  marginTop: 10,
+  padding: 12,
+  background: '#f0fdf4',
+  color: '#065f46',
+  borderRadius: 6,
+  border: '1px solid #bbf7d0',
+  fontSize: 14,
 };
 
 const divider: React.CSSProperties = {

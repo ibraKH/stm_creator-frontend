@@ -29,6 +29,13 @@ function __pickApiBase(): string {
 
 export const API_BASE = __pickApiBase();
 
+export class ApiError extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 export type AuthUser = {
   id: string | number;
   email: string;
@@ -47,46 +54,84 @@ export async function login(email: string, password: string): Promise<AuthRespon
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    const msg = await safeError(res);
-    throw new Error(msg || `Login failed (${res.status})`);
+    const { code, message } = await safeErrorFull(res);
+    throw new ApiError(code ?? '', message ?? `Login failed (${res.status})`);
   }
   return res.json();
 }
 
-export async function signup(name: string, email: string, password: string, role?: string): Promise<AuthResponse> {
+export async function signup(
+  name: string,
+  email: string,
+  password: string,
+  role?: string,
+): Promise<{ message: string }> {
   const res = await fetch(`${API_BASE}/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password, role }),
   });
   if (!res.ok) {
-    const msg = await safeError(res);
-    throw new Error(msg || `Signup failed (${res.status})`);
+    const { code, message } = await safeErrorFull(res);
+    throw new ApiError(code ?? '', message ?? `Signup failed (${res.status})`);
   }
   return res.json();
 }
 
-async function safeError(res: Response): Promise<string | undefined> {
+export async function verifyEmail(token: string): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const { code, message } = await safeErrorFull(res);
+    throw new ApiError(code ?? '', message ?? `Verification failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function resendVerification(email: string): Promise<void> {
+  await fetch(`${API_BASE}/auth/resend-verification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  // Always 200 — vague by design to avoid email enumeration
+}
+
+async function safeErrorFull(res: Response): Promise<{ code?: string; message?: string }> {
   try {
     const text = await res.text();
     let data: any;
-    try { data = JSON.parse(text); } catch { return text?.trim() || undefined; }
+    try { data = JSON.parse(text); } catch { return { message: text?.trim() || undefined }; }
 
     const err = data?.error ?? data;
-    if (typeof err === 'string') return err;
-    if (typeof err?.message === 'string') return err.message;
+    const code =
+      typeof err?.code === 'string' ? err.code :
+      typeof data?.code === 'string' ? data.code :
+      undefined;
 
-    const details = err?.details ?? data?.details;
-    if (Array.isArray(details) && details.length) {
-      const first: any = details[0];
-      const msg = typeof first?.message === 'string' ? first.message : undefined;
-      const path = typeof first?.path === 'string' ? first.path : undefined;
-      return msg && path ? `${path}: ${msg}` : msg;
+    let message: string | undefined;
+    if (typeof err === 'string') {
+      message = err;
+    } else if (typeof err?.message === 'string') {
+      message = err.message;
+    } else {
+      const details = err?.details ?? data?.details;
+      if (Array.isArray(details) && details.length) {
+        const first: any = details[0];
+        const msg = typeof first?.message === 'string' ? first.message : undefined;
+        const path = typeof first?.path === 'string' ? first.path : undefined;
+        message = msg && path ? `${path}: ${msg}` : msg;
+      } else if (typeof data?.message === 'string') {
+        message = data.message;
+      }
     }
-    if (typeof data?.message === 'string') return data.message;
-    return undefined;
+
+    return { code, message };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
