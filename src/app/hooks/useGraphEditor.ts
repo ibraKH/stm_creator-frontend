@@ -90,6 +90,7 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
         setIsNodeModalOpen: state.setIsNodeModalOpen,
         getIsEditing: () => state.isEditing,
         getCurrentNodeId: () => state.currentNodeId,
+        getData: () => state.bmrgData,
         setData: state.setBmrgData,
         handleNodeLabelChange,
         requestNodeEdit: options.requestNodeEdit,
@@ -242,6 +243,12 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
             }
             nodeHandlers.handleSaveNode(attributes);
         },
+        handleDuplicateState: (nodeId) => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            nodeHandlers.handleDuplicateState(nodeId);
+        },
         applyRemoteNodePatch,
         handleSaveTransition,
         handleDeleteTransition: (transition) => {
@@ -267,6 +274,34 @@ export function useGraphEditor(options: UseGraphEditorOptions = {}): UseGraphEdi
                 return;
             }
             void deleteActions.handleDeleteModel();
+        },
+        // Open the node editor (NodeModal) for an existing node id. Reuses
+        // the same flow as clicking on a node — including the lock-acquire
+        // step. Used by the canvas right-click context menu.
+        openEditNode: (nodeId) => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            nodeHandlers.handleNodeClick(nodeId);
+        },
+        // Open the transition editor (TransitionModal) for an existing
+        // transition id. Used by the canvas right-click context menu.
+        openEditTransition: (transitionId) => {
+            if (blockIfReadOnly()) {
+                return;
+            }
+            const data = state.bmrgData;
+            if (!data) {
+                return;
+            }
+            const transition = data.transitions.find(
+                (item) => item.transition_id === transitionId,
+            );
+            if (!transition) {
+                return;
+            }
+            state.setCurrentTransition(transition);
+            openTransitionModal();
         },
         handleReLayout: modelActions.handleReLayout,
         applyLayout: canEdit

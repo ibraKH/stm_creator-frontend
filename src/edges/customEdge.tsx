@@ -1,4 +1,5 @@
 import { BaseEdge, EdgeProps, getBezierPath, getSmoothStepPath, Position } from '@xyflow/react';
+import './customEdge.css';
 
 // Function to create a loop/self-transition path
 const getLoopPath = (
@@ -138,10 +139,21 @@ export default function CustomEdge({
 
     // Get transition delta value for styling
     const transitionDelta = (data?.transitionDelta as number) ?? 0;
-    const isNegativeDelta = (transitionDelta as number) < 0;
+    const commentCount = (data?.commentCount as number) ?? 0;
+    const onCommentBubbleClick = data?.onCommentBubbleClick as ((edgeId: string) => void) | undefined;
+    const isNegativeDelta = transitionDelta < 0;
+    const isZeroDelta = transitionDelta === 0;
 
-    // Determine edge color based on transition delta
-    const edgeColor = isNegativeDelta ? '#ff5555' : '#55aa55';
+    // Determine edge color based on transition delta:
+    //   positive -> green, negative -> red, zero -> gray
+    let edgeColor: string;
+    if (isZeroDelta) {
+        edgeColor = '#9ca3af';
+    } else if (isNegativeDelta) {
+        edgeColor = '#ff5555';
+    } else {
+        edgeColor = '#55aa55';
+    }
     const edgeWidth = Math.max(1, Math.abs(transitionDelta) * 5 + 1);
 
     // Adjust label positioning for better visibility
@@ -214,6 +226,29 @@ export default function CustomEdge({
                     >
                         Δ {transitionDelta.toFixed(2)}
                     </div>
+                </foreignObject>
+            )}
+
+            {commentCount > 0 && (
+                <foreignObject
+                    width={70}
+                    height={28}
+                    x={labelX - 35}
+                    y={labelY + 18 + labelOffset}
+                    className="edge-comment-foreignobject"
+                    requiredExtensions="http://www.w3.org/1999/xhtml"
+                >
+                    <button
+                        type="button"
+                        className="edge-comment-bubble"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onCommentBubbleClick?.(id);
+                        }}
+                        title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+                    >
+                        C {commentCount}
+                    </button>
                 </foreignObject>
             )}
         </>

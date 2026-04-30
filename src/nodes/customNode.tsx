@@ -29,9 +29,21 @@ function getConditionBarWidth(condition: string): number {
     return 0;
 }
 
+function normaliseImageUrls(data: CustomNodeData): string[] {
+    const attributes = data.attributes;
+    if (!attributes) {
+        return [];
+    }
+    if (Array.isArray(attributes.imageUrls) && attributes.imageUrls.length > 0) {
+        return attributes.imageUrls.filter((url) => typeof url === 'string' && url.trim() !== '');
+    }
+    return attributes.imageUrl ? [attributes.imageUrl] : [];
+}
+
 export function CustomNode({ data, id }: CustomNodeProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [nodeLabel, setNodeLabel] = useState(data.label);
+    const [expandedImage, setExpandedImage] = useState<string | null>(null);
     const canEdit = data.canEdit !== false;
     const inlineEditEnabled = data.enableInlineEdit === true;
     const isLockedByOther = Boolean(data.isLocked && !data.isLockedByMe);
@@ -80,6 +92,7 @@ export function CustomNode({ data, id }: CustomNodeProps) {
 
     const classNum = getVastClassNumber(vastClass) || 'default';
     const barWidth = getConditionBarWidth(condition);
+    const imageUrls = normaliseImageUrls(data);
 
     const containerStyle = {
         boxShadow: isSelected ? '0 0 0 4px #16a34a, 0 2px 5px rgba(0, 0, 0, 0.1)' : undefined,
@@ -133,7 +146,7 @@ export function CustomNode({ data, id }: CustomNodeProps) {
                             onClick={handleCommentBubbleClick}
                             title={`${data.commentCount} comment${data.commentCount === 1 ? '' : 's'}`}
                         >
-                            💬 {data.commentCount}
+                            C {data.commentCount}
                         </button>
                     )}
 
@@ -160,8 +173,64 @@ export function CustomNode({ data, id }: CustomNodeProps) {
                                 <div className="node-bar-fill" style={{ width: `${barWidth}%` }} />
                             </div>
                         )}
+
+                        {imageUrls.length > 0 && (
+                            <div className="node-image-strip">
+                                {imageUrls.slice(0, 3).map((url, index) => (
+                                    <button
+                                        type="button"
+                                        key={`${url.slice(0, 24)}-${index}`}
+                                        className="node-image-thumb"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            setExpandedImage(url);
+                                        }}
+                                        title="Preview image"
+                                    >
+                                        <img src={url} alt={`State image ${index + 1}`} />
+                                    </button>
+                                ))}
+                                {imageUrls.length > 3 && (
+                                    <button
+                                        type="button"
+                                        className="node-image-more"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            setExpandedImage(imageUrls[3]);
+                                        }}
+                                        title="Preview more images"
+                                    >
+                                        +{imageUrls.length - 3}
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </>
+            )}
+
+            {expandedImage && (
+                <div
+                    className="node-image-preview"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        setExpandedImage(null);
+                    }}
+                >
+                    <div className="node-image-preview-inner">
+                        <button
+                            type="button"
+                            className="node-image-preview-close"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                setExpandedImage(null);
+                            }}
+                        >
+                            x
+                        </button>
+                        <img src={expandedImage} alt="State preview" />
+                    </div>
+                </div>
             )}
 
             {/* Top edge handles */}

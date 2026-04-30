@@ -15,6 +15,7 @@ interface GraphToolbarProps {
   readonly onDeleteModel?: () => void;
   /** Opens the unified Milestone modal (save + history) */
   readonly onOpenMilestone: () => void;
+  readonly onOpenVersionCompare?: () => void;
   readonly onImportEKS: (file: File) => void | Promise<void>;
   readonly onExportEKS: () => void;
   readonly onRelayout: () => void;
@@ -28,6 +29,7 @@ interface GraphToolbarProps {
   /** Toggle the right-side comment panel */
   readonly onToggleComments?: () => void;
   readonly userEmail?: string | null;
+  readonly userRole?: string | null;
   readonly isGuest?: boolean;
   readonly onLogout?: () => void;
   readonly onSignIn?: () => void;
@@ -50,6 +52,7 @@ export function GraphToolbar({
   onRelayout,
   onApplyLayout,
   onOpenMilestone,
+  onOpenVersionCompare,
   onImportEKS,
   onExportEKS,
   onToggleSelfTransitions,
@@ -59,6 +62,7 @@ export function GraphToolbar({
   onOpenHelp,
   onToggleComments,
   userEmail,
+  userRole,
   onLogout,
   onSignIn,
   canEdit,
@@ -138,6 +142,16 @@ export function GraphToolbar({
 
       <button data-tour="milestone" onClick={onOpenMilestone} className="tb-btn">
         Milestone
+      </button>
+
+      <button
+        data-tour="compare-versions"
+        onClick={onOpenVersionCompare}
+        className="tb-btn compare"
+        disabled={!onOpenVersionCompare}
+        title="Compare milestones"
+      >
+        Compare
       </button>
 
       <div className="tb-sep" />
@@ -318,6 +332,11 @@ export function GraphToolbar({
       <div className="tb-sep" />
 
       {/* Auth */}
+      {userRole === 'Admin' && (
+        <a href="/admin" className="tb-btn" style={{ textDecoration: 'none', color: 'inherit' }}>
+          Admin Panel
+        </a>
+      )}
       {userEmail ? (
         <button onClick={onLogout} className="tb-btn">Logout</button>
       ) : (

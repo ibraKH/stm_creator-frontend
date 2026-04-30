@@ -39,14 +39,17 @@ export function clearNodeSelection(nodes: AppNode[]): AppNode[] {
 }
 
 export function deriveModalValues(node: AppNode): NodeAttributes {
+    const imageUrls = normaliseImageUrls(node.data.attributes);
     return {
         stateName: node.data.label,
         stateNumber: node.data.attributes?.stateNumber ?? '',
         vastClass: node.data.attributes?.vastClass ?? '',
         condition: node.data.attributes?.condition ?? '',
-        imageUrl: node.data.attributes?.imageUrl ?? '',
+        imageUrl: imageUrls[0] ?? '',
+        imageUrls,
         note: node.data.attributes?.note ?? '',
         id: node.id,
+        template: node.data.attributes?.template,
     };
 }
 
@@ -66,8 +69,10 @@ export function applyNodeAttributes(nodes: AppNode[], nodeId: string, attributes
                     stateNumber: attributes.stateNumber,
                     vastClass: attributes.vastClass,
                     condition: attributes.condition,
-                    imageUrl: attributes.imageUrl,
+                    imageUrl: normaliseImageUrls(attributes)[0] ?? '',
+                    imageUrls: normaliseImageUrls(attributes),
                     note: attributes.note,
+                    template: attributes.template,
                 },
             },
         } as AppNode;
@@ -114,7 +119,9 @@ export function applyNodePatch(nodes: AppNode[], nodeId: string, field: string, 
             vastClass: '',
             condition: '',
             imageUrl: '',
+            imageUrls: [],
             note: '',
+            template: undefined,
         };
 
         const nextAttributes = { ...currentAttributes };
@@ -131,6 +138,12 @@ export function applyNodePatch(nodes: AppNode[], nodeId: string, field: string, 
             nextAttributes.note = value;
         } else if (field === 'imageUrl' && typeof value === 'string') {
             nextAttributes.imageUrl = value;
+            nextAttributes.imageUrls = value ? [value] : [];
+        } else if (field === 'imageUrls' && isStringArray(value)) {
+            nextAttributes.imageUrls = value;
+            nextAttributes.imageUrl = value[0] ?? '';
+        } else if (field === 'template') {
+            nextAttributes.template = value as NodeAttributes['template'];
         } else if (field === 'conditionLower' || field === 'conditionUpper') {
             const current = parseConditionBounds(currentAttributes.condition);
             const lower = field === 'conditionLower' ? String(value ?? '') : current.lower;
@@ -164,9 +177,12 @@ export function applyNodePatch(nodes: AppNode[], nodeId: string, field: string, 
 
 export function createCustomNode(
     attributes: NodeAttributes,
+    stateId: number,
     onLabelChange: (id: string, label: string) => void,
     onNodeClick: (id: string) => void,
+    position?: { x: number; y: number },
 ): AppNode {
+    const imageUrls = normaliseImageUrls(attributes);
     const nodeData: CustomNodeData = {
         label: attributes.stateName,
         onLabelChange,
@@ -176,16 +192,22 @@ export function createCustomNode(
             stateNumber: attributes.stateNumber,
             vastClass: attributes.vastClass,
             condition: attributes.condition,
-            imageUrl: attributes.imageUrl,
+            imageUrl: imageUrls[0] ?? '',
+            imageUrls,
             note: attributes.note,
+            template: attributes.template,
         },
     };
 
     return {
-        id: `node-${Date.now()}`,
+        // Use the BMRG frontend_state_id as the React Flow node id so it stays
+        // in sync with transitionsToEdges() and parseStateId() (both expect
+        // the `state-N` prefix). Using a timestamp here would orphan the node
+        // from the BMRG state and silently break edge creation/editing.
+        id: `state-${stateId}`,
         type: 'custom',
         data: nodeData,
-        position: {
+        position: position ?? {
             x: window.innerWidth / 2,
             y: window.innerHeight / 2,
         },
@@ -197,6 +219,11 @@ export function updateBmrgStateName(
     stateId: number,
     attributes: NodeAttributes,
 ): BMRGData {
+    const imageUrls = normaliseImageUrls(attributes);
+    const bounds = parseConditionBounds(attributes.condition);
+    const lower = Number.parseFloat(bounds.lower);
+    const upper = Number.parseFloat(bounds.upper);
+
     const states = data.states.map((state) => {
         if (getGraphStateId(state) !== stateId) {
             return state;
@@ -204,13 +231,21 @@ export function updateBmrgStateName(
 
         const nextAttributes = {
             ...(state.attributes ?? {}),
-            ...(attributes.imageUrl !== undefined ? { imageUrl: attributes.imageUrl } : {}),
+            imageUrl: imageUrls[0] ?? '',
+            imageUrls,
             ...(attributes.note !== undefined ? { note: attributes.note } : {}),
+            ...(attributes.template !== undefined ? { template: attributes.template } : {}),
         };
 
         return {
             ...state,
             state_name: attributes.stateName,
+            vast_state: {
+                ...state.vast_state,
+                vast_class: attributes.vastClass,
+            },
+            condition_lower: Number.isFinite(lower) ? lower : state.condition_lower,
+            condition_upper: Number.isFinite(upper) ? upper : state.condition_upper,
             attributes: nextAttributes,
         };
     });
@@ -256,7 +291,7 @@ export function applyBmrgNodePatch(
             return Number.isFinite(parsed) ? { ...state, condition_upper: parsed } : state;
         }
 
-        if (field === 'note' || field === 'imageUrl') {
+        if (field === 'note' || field === 'imageUrl' || field === 'imageUrls' || field === 'template') {
             return {
                 ...state,
                 attributes: {
@@ -294,6 +329,16 @@ export function buildStateFromAttributes(
     attributes: NodeAttributes,
     newStateId: number,
 ): StateData {
+    const imageUrls = normaliseImageUrls(attributes);
+    const bounds = parseConditionBounds(attributes.condition);
+    const lower = Number.parseFloat(bounds.lower);
+    const upper = Number.parseFloat(bounds.upper);
+    const stateAttributes = {
+        ...(imageUrls.length > 0 ? { imageUrl: imageUrls[0], imageUrls } : {}),
+        ...(attributes.note ? { note: attributes.note } : {}),
+        ...(attributes.template ? { template: attributes.template } : {}),
+    };
+
     return {
         frontend_state_id: newStateId,
         state_name: attributes.stateName,
@@ -306,11 +351,11 @@ export function buildStateFromAttributes(
             eks_substate: '',
             link: '',
         },
-        condition_upper: 1.0,
-        condition_lower: 0.0,
+        condition_upper: Number.isFinite(upper) ? upper : 1.0,
+        condition_lower: Number.isFinite(lower) ? lower : 0.0,
         eks_condition_estimate: -9999,
         elicitation_type: 'pilot region',
-        attributes: attributes.imageUrl ? { imageUrl: attributes.imageUrl } : null,
+        attributes: Object.keys(stateAttributes).length > 0 ? stateAttributes : null,
     };
 }
 export function addStateToBmrg(data: BMRGData, state: StateData): BMRGData {
@@ -352,4 +397,18 @@ export function updateEdgeWithTransition(
             },
         };
     });
+}
+
+function normaliseImageUrls(attributes: NodeAttributes | undefined): string[] {
+    if (!attributes) {
+        return [];
+    }
+    if (Array.isArray(attributes.imageUrls)) {
+        return attributes.imageUrls.filter((url): url is string => typeof url === 'string' && url.trim() !== '');
+    }
+    return attributes.imageUrl ? [attributes.imageUrl] : [];
+}
+
+function isStringArray(value: unknown): value is string[] {
+    return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }

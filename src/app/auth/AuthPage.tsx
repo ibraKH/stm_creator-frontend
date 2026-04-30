@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login, signup, authStorage, type AuthResponse } from './api';
+import { login, signup, resendVerification, authStorage, ApiError, type AuthResponse } from './api';
 import { ModelSelectionModal } from '../components/ModelSelectionModal';
 import EcosystemPanel from './EcosystemPanel';
 
@@ -12,6 +12,8 @@ type Props = {
   readonly onContinueGuest: () => void;
   readonly onModelSelected?: (modelName: string, isNew: boolean) => void;
 };
+
+// --- UI Helper Components (Keeping your design) ---
 
 function AField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -44,6 +46,8 @@ function APrimaryBtn({ children, loading }: { children: React.ReactNode; loading
   );
 }
 
+// --- Main Page Component ---
+
 export default function AuthPage({ onAuthenticated, onContinueGuest, onModelSelected }: Props) {
   const navigate = useNavigate();
   const [tab, setTab] = useState<'login' | 'signup'>('login');
@@ -51,7 +55,10 @@ export default function AuthPage({ onAuthenticated, onContinueGuest, onModelSele
   const [showModelSelection, setShowModelSelection] = useState(false);
   const [pendingAuth, setPendingAuth] = useState<AuthResponse | null>(null);
 
-  useEffect(() => { const t = setTimeout(() => setMounted(true), 60); return () => clearTimeout(t); }, []);
+  useEffect(() => { 
+    const t = setTimeout(() => setMounted(true), 60); 
+    return () => clearTimeout(t); 
+  }, []);
 
   const trans = (delay = 0): React.CSSProperties => ({
     opacity: mounted ? 1 : 0,
@@ -67,12 +74,18 @@ export default function AuthPage({ onAuthenticated, onContinueGuest, onModelSele
   const handleModelSelected = (modelName: string, isNew: boolean) => {
     setShowModelSelection(false);
     if (onModelSelected) onModelSelected(modelName, isNew);
-    if (pendingAuth) { onAuthenticated(pendingAuth); setPendingAuth(null); }
+    if (pendingAuth) { 
+        onAuthenticated(pendingAuth); 
+        setPendingAuth(null); 
+    }
   };
 
   const handleCloseModelSelection = () => {
     setShowModelSelection(false);
-    if (pendingAuth) { onAuthenticated(pendingAuth); setPendingAuth(null); }
+    if (pendingAuth) { 
+        onAuthenticated(pendingAuth); 
+        setPendingAuth(null); 
+    }
   };
 
   return (
@@ -83,10 +96,11 @@ export default function AuthPage({ onAuthenticated, onContinueGuest, onModelSele
         .auth-guest:hover { color: ${TERN_CHARCOAL} !important; }
         @media (max-width: 768px) {
           .auth-left { width: 100% !important; min-width: unset !important; padding: 36px 28px !important; }
+          .auth-right-panel { display: none !important; }
         }
       `}</style>
 
-      {/* LEFT: Form */}
+      {/* LEFT: Form Section */}
       <div className="auth-left" style={{ width: '46%', minWidth: 380, backgroundColor: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative', padding: '44px 64px', overflowY: 'auto' }}>
         <button
           onClick={() => navigate('/')}
@@ -102,6 +116,7 @@ export default function AuthPage({ onAuthenticated, onContinueGuest, onModelSele
         >
           ← Home
         </button>
+
         <div style={{ maxWidth: 360 }}>
           <div style={trans(80)}>
             <h1 style={{ fontSize: 30, fontWeight: 700, color: TERN_CHARCOAL, margin: '0 0 8px', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
@@ -156,9 +171,12 @@ export default function AuthPage({ onAuthenticated, onContinueGuest, onModelSele
         </p>
       </div>
 
-      {/* RIGHT: Live ecosystem STM panel */}
-      <EcosystemPanel />
+      {/* RIGHT: Live ecosystem STM panel (Your new feature) */}
+      <div className="auth-right-panel" style={{ flex: 1, backgroundColor: '#f8fafc', overflow: 'hidden' }}>
+        <EcosystemPanel />
+      </div>
 
+      {/* Modal logic from the main branch */}
       <ModelSelectionModal
         isOpen={showModelSelection}
         onClose={handleCloseModelSelection}
@@ -169,10 +187,14 @@ export default function AuthPage({ onAuthenticated, onContinueGuest, onModelSele
   );
 }
 
+// --- Form Components (Refined with shared styles) ---
+
 function LoginForm({ onAuthenticated }: { readonly onAuthenticated: (auth: AuthResponse) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isUnverified, setIsUnverified] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
 
@@ -187,13 +209,18 @@ function LoginForm({ onAuthenticated }: { readonly onAuthenticated: (auth: AuthR
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsUnverified(false);
     setLoading(true);
     try {
       const auth = await login(email, password);
       authStorage.save(auth);
       onAuthenticated(auth);
     } catch (err) {
-      setError((err as Error).message || 'Login failed');
+      if (err instanceof ApiError && err.code === 'AUTH_UNVERIFIED') {
+        setIsUnverified(true);
+      } else {
+        setError((err as Error).message || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -214,6 +241,12 @@ function LoginForm({ onAuthenticated }: { readonly onAuthenticated: (auth: AuthR
           onChange={e => setPassword(e.target.value)} />
       </AField>
       {error && <p style={{ color: '#ef4444', fontSize: 12.5, margin: 0 }}>{error}</p>}
+      {isUnverified && (
+        <div style={{ padding: 12, backgroundColor: '#fef2f2', borderRadius: 8, border: '1px solid #fee2e2' }}>
+            <p style={{ color: '#991b1b', fontSize: 12, margin: '0 0 8px' }}>Email not verified.</p>
+            <button type="button" onClick={() => resendVerification(email)} style={{ fontSize: 12, color: TERN_TEAL, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Resend link</button>
+        </div>
+      )}
       <APrimaryBtn loading={loading}>Login</APrimaryBtn>
     </form>
   );
@@ -227,6 +260,7 @@ function SignupForm({ onAuthenticated }: { readonly onAuthenticated: (auth: Auth
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const inputStyle = (id: string): React.CSSProperties => ({
     width: '100%', padding: '11px 14px', fontSize: 14,
@@ -241,15 +275,23 @@ function SignupForm({ onAuthenticated }: { readonly onAuthenticated: (auth: Auth
     setError(null);
     setLoading(true);
     try {
-      const auth = await signup(name, email, password, role);
-      authStorage.save(auth);
-      onAuthenticated(auth);
+      await signup(name, email, password, role);
+      setSentTo(email);
     } catch (err) {
       setError((err as Error).message || 'Signup failed');
     } finally {
       setLoading(false);
     }
   };
+
+  if (sentTo) {
+    return (
+      <div style={{ textAlign: 'center', padding: '20px 0' }}>
+        <p style={{ fontWeight: 600, color: TERN_CHARCOAL }}>Check your inbox</p>
+        <p style={{ fontSize: 14, color: '#71717a' }}>Link sent to {sentTo}</p>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -272,13 +314,7 @@ function SignupForm({ onAuthenticated }: { readonly onAuthenticated: (auth: Auth
           onChange={e => setPassword(e.target.value)} />
       </AField>
       <AField label="Role">
-        <select style={{
-          ...inputStyle('s-r'), appearance: 'none', cursor: 'pointer',
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2371717a'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center',
-        }}
-          value={role} onFocus={() => setFocused('s-r')} onBlur={() => setFocused(null)}
-          onChange={e => setRole(e.target.value)}>
+        <select style={{ ...inputStyle('s-r'), cursor: 'pointer' }} value={role} onChange={e => setRole(e.target.value)}>
           <option>Viewer</option>
           <option>Editor</option>
           <option>Admin</option>
